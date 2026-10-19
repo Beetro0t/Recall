@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  BarChart3,
   Check,
   CheckCircle2,
   Clock,
@@ -9,6 +10,7 @@ import {
   Home,
   Share2,
   Sparkles,
+  Users,
   XCircle,
 } from 'lucide-react';
 import { countMatchedTiles } from '../game/board';
@@ -20,6 +22,7 @@ import {
 import { calculateDailyMatchedTiles, calculateDailyTotalScore } from '../game/scoring';
 import { getRoundPuzzle } from '../game/stateMachine';
 import type { DailyChallenge, RoundResult } from '../game/types';
+import { getDailyCommunityComparison } from '../services/communityStats';
 import { formatShareableResults, shareOrCopyResults } from '../services/sharing';
 import { CelebrationBurst } from '../components/CelebrationBurst';
 import { GameBoard } from '../components/GameBoard';
@@ -80,6 +83,16 @@ export function ResultsScreen({
   const solvedCount = results.filter((r) => r.status === 'success').length;
   const isPerfectSweep =
     results.length === ROUND_CONFIGS.length && solvedCount === ROUND_CONFIGS.length;
+
+  const community = useMemo(
+    () => getDailyCommunityComparison(challenge, results),
+    [challenge, results],
+  );
+
+  const maxBucketPct = Math.max(
+    1,
+    ...community.distributionBuckets.map((b) => b.percentage),
+  );
 
   const shareText = formatShareableResults({
     challengeId,
@@ -204,11 +217,95 @@ export function ResultsScreen({
         </div>
       </div>
 
+      {/* Dialed.gg-style Community Comparison & Distribution Card */}
+      <div
+        className="p-3.5 rounded-[22px] bg-white/[0.03] border border-white/[0.09] space-y-3"
+        data-testid="community-comparison-card"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+            <BarChart3 className="w-3.5 h-3.5 text-[#55EFC4]" aria-hidden="true" />
+            <span>How You Did vs. Others</span>
+          </div>
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#55EFC4]/15 border border-[#55EFC4]/35 text-[11px] font-semibold text-[#55EFC4] tabular-nums"
+            data-testid="community-percentile-badge"
+          >
+            Top {community.topPercentile}% · Beat {community.betterThanPct}%
+          </span>
+        </div>
+
+        {/* You vs Crowd Avg summary row */}
+        <div className="grid grid-cols-2 gap-2 text-xs tabular-nums">
+          <div className="px-3 py-2 rounded-[14px] bg-black/45 border border-white/[0.06] flex items-center justify-between">
+            <span className="text-white/55">Your Accuracy</span>
+            <strong className="text-white font-semibold">
+              {totalMatchedTiles}/{totalPossibleTiles} ({totalScore} pts)
+            </strong>
+          </div>
+          <div className="px-3 py-2 rounded-[14px] bg-black/45 border border-white/[0.06] flex items-center justify-between">
+            <span className="text-white/55">Crowd Average</span>
+            <strong className="text-white/85 font-semibold">
+              {community.avgMatchedTiles}/{totalPossibleTiles} ({community.avgScore}{' '}
+              pts)
+            </strong>
+          </div>
+        </div>
+
+        {/* 7-Bucket Accuracy Distribution Histogram */}
+        <div className="pt-1 space-y-1.5" data-testid="community-distribution-chart">
+          <div className="grid grid-cols-7 gap-1.5 items-end h-20 pt-4 px-1">
+            {community.distributionBuckets.map((bucket) => {
+              const barHeightPct = Math.max(
+                14,
+                Math.round((bucket.percentage / maxBucketPct) * 100),
+              );
+              return (
+                <div
+                  key={bucket.id}
+                  className="h-full flex flex-col items-center justify-end gap-1"
+                >
+                  <span
+                    className={`text-[9px] tabular-nums font-semibold ${
+                      bucket.isPlayerBucket ? 'text-[#55EFC4]' : 'text-white/45'
+                    }`}
+                  >
+                    {bucket.isPlayerBucket ? 'YOU' : `${bucket.percentage}%`}
+                  </span>
+                  <div
+                    className={`w-full rounded-t-[6px] transition-all ${
+                      bucket.isPlayerBucket
+                        ? 'bg-[#55EFC4] shadow-[0_0_14px_rgba(85,239,196,0.5)]'
+                        : 'bg-white/18'
+                    }`}
+                    style={{ height: `${barHeightPct}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5 text-center px-1">
+            {community.distributionBuckets.map((bucket) => (
+              <span
+                key={bucket.id}
+                className={`text-[10px] tabular-nums ${
+                  bucket.isPlayerBucket
+                    ? 'text-[#55EFC4] font-semibold'
+                    : 'text-white/45'
+                }`}
+              >
+                {bucket.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Visual 3-Round Boards Dashboard Overview */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1 text-xs text-white/55">
           <span className="font-semibold uppercase tracking-[0.14em] text-white">
-            Boards Overview Dashboard
+            Boards & Choice Breakdown
           </span>
           <span>25 pts per correct tile</span>
         </div>
@@ -226,6 +323,9 @@ export function ResultsScreen({
               res.matchedTiles ?? countMatchedTiles(playerOrder, puzzle.targetOrder);
             const isSuccess = res.status === 'success';
             const isMismatch = !isSuccess && res.failureReason === 'mismatch';
+            const roundCrowd = community.roundComparisons.find(
+              (rc) => rc.roundId === res.roundId,
+            );
 
             return (
               <div
@@ -302,16 +402,22 @@ export function ResultsScreen({
                   </div>
                 </div>
 
-                {/* Card footer details */}
+                {/* Card footer details with relative crowd telemetry */}
                 <div className="flex items-center justify-between text-[11px] text-white/50 px-0.5 tabular-nums">
-                  <span>
-                    Swaps used: <strong className="text-white">{res.swaps}</strong>{' '}
-                    (optimal: {res.optimalSwaps})
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="w-3 h-3 text-[#55EFC4]" aria-hidden="true" />
+                    <span>
+                      Beat{' '}
+                      <strong className="text-white">
+                        {roundCrowd?.betterThanPct ?? 50}%
+                      </strong>{' '}
+                      · Crowd avg {roundCrowd?.avgMatchedTiles ?? matchedCount}/
+                      {config.tileCount}
+                    </span>
                   </span>
                   <span>
-                    {res.remainingMs > 0
-                      ? `${(res.remainingMs / 1000).toFixed(1)}s left`
-                      : "Time's up"}
+                    Swaps: <strong className="text-white">{res.swaps}</strong> (opt{' '}
+                    {res.optimalSwaps})
                   </span>
                 </div>
               </div>

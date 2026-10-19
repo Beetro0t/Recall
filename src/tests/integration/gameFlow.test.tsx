@@ -57,11 +57,15 @@ describe('Recall Integration Game Flows', () => {
     vi.useRealTimers();
   });
 
-  it('completes all 3 rounds by placing colours from the slider bar into empty squares, with direct round continuation, dashboard overview, and Dev Mode replay', () => {
+  it('completes all 3 rounds on Daily #001 by placing colours from the slider bar, tracks player choices, and shows relative community performance', () => {
     const challenge = generateDailyChallenge('2026-10-19');
+    expect(challenge.challengeNumber).toBe(1);
+
     render(<App overrideChallengeId="2026-10-19" />);
 
     expect(screen.getByTestId('home-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('home-screen')).toHaveTextContent('Daily #001');
+    expect(screen.queryByTestId('header-dev-mode-button')).not.toBeInTheDocument();
 
     // First-time click opens tutorial
     fireEvent.click(screen.getByTestId('start-challenge-button'));
@@ -86,6 +90,10 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('round-success-screen')).toBeInTheDocument();
     expect(screen.getByTestId('celebration-burst')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-score')).toHaveTextContent('+100');
+    expect(screen.getByTestId('round-result-percentile')).toHaveTextContent(
+      /Beat \d+%/,
+    );
+    expect(screen.getByTestId('round-community-choices')).toBeInTheDocument();
 
     // Click Continue to Round 2 -> loads Round 2 memorisation directly
     expect(screen.getByTestId('round-continue-button')).toHaveTextContent(
@@ -110,6 +118,7 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.queryByTestId('celebration-burst')).not.toBeInTheDocument();
     expect(screen.getByTestId('round-result-player-board')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-target-board')).toBeInTheDocument();
+    expect(screen.getByTestId('round-community-choices')).toBeInTheDocument();
 
     // Click Continue to Round 3 -> loads Round 3 memorisation directly
     expect(screen.getByTestId('round-continue-button')).toHaveTextContent(
@@ -141,6 +150,13 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('final-matched-tiles')).toHaveTextContent('12/18');
     expect(screen.getByTestId('final-total-score')).toHaveTextContent('300');
 
+    // Verify Community Comparison Card & Distribution Chart on Results Dashboard
+    expect(screen.getByTestId('community-comparison-card')).toBeInTheDocument();
+    expect(screen.getByTestId('community-percentile-badge')).toHaveTextContent(
+      /Top \d+% · Beat \d+%/,
+    );
+    expect(screen.getByTestId('community-distribution-chart')).toHaveTextContent('YOU');
+
     // Open full-size Review Inspector modal
     fireEvent.click(screen.getByTestId('open-review-button'));
     expect(screen.getByTestId('review-modal')).toBeInTheDocument();
@@ -157,19 +173,14 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('start-challenge-button')).toHaveTextContent(
       'Results (12/18 right)',
     );
-
-    // Toggle Dev Mode in header and replay immediately after completing the daily attempt
-    fireEvent.click(screen.getByTestId('header-dev-mode-button'));
-    expect(screen.getByTestId('dev-toolbar')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('dev-reset-replay-button'));
-    expect(screen.getByTestId('memorise-screen')).toBeInTheDocument();
   });
 
-  it('enables tactile sounds by default and persists settings across reloads', () => {
+  it('enables tactile sounds by default, removes dev settings, and persists preferences across reloads', () => {
     const { unmount } = render(<App overrideChallengeId="2026-10-19" />);
 
     fireEvent.click(screen.getByTestId('open-settings-button'));
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('toggle-dev-mode')).not.toBeInTheDocument();
 
     const soundToggle = screen.getByTestId('toggle-sound');
     expect(soundToggle).toHaveAttribute('aria-checked', 'true');

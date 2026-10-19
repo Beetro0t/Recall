@@ -3,7 +3,6 @@ import { ROUND_CONFIGS } from '../game/config';
 import { calculateDailyTotalScore } from '../game/scoring';
 import { useGameSession } from '../hooks/useGameSession';
 import { usePreferences } from '../hooks/usePreferences';
-import { DevToolbar } from '../components/DevToolbar';
 import { ReviewModal } from '../components/ReviewModal';
 import { RoundHeader } from '../components/RoundHeader';
 import { SettingsModal } from '../components/SettingsModal';
@@ -26,7 +25,6 @@ export function App({ overrideChallengeId }: AppProps = {}) {
     setSoundEnabled,
     setSymbolsEnabled,
     setReducedMotionOverride,
-    setDevModeEnabled,
     markOnboardingComplete,
   } = usePreferences();
 
@@ -64,10 +62,6 @@ export function App({ overrideChallengeId }: AppProps = {}) {
     handleLockInSolution,
     handleContinueFromRoundEnd,
     handleBeginNextRound,
-    devResetAndReplay,
-    devNextDailyPuzzle,
-    devJumpToRound,
-    devSkipMemoriseTimer,
   } = useGameSession({
     soundEnabled: preferences.soundEnabled,
     hasCompletedOnboarding: preferences.hasCompletedOnboarding,
@@ -140,8 +134,6 @@ export function App({ overrideChallengeId }: AppProps = {}) {
           tileCount={isRoundHeaderActive ? currentRoundConfig.tileCount : undefined}
           showHomeButton={!showingHome}
           showReviewButton={session.results.length > 0}
-          devModeEnabled={preferences.devModeEnabled}
-          onToggleDevMode={() => setDevModeEnabled(!preferences.devModeEnabled)}
           onNavigateHome={navigateHome}
           onOpenReview={openReview}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -149,18 +141,6 @@ export function App({ overrideChallengeId }: AppProps = {}) {
             showingHome || session.phase === 'results' ? openTutorial : undefined
           }
         />
-
-        {preferences.devModeEnabled && (
-          <DevToolbar
-            challengeId={challenge.challengeId}
-            currentRoundId={session.currentRoundId}
-            phase={session.phase}
-            onResetAndReplay={devResetAndReplay}
-            onNextDailyPuzzle={devNextDailyPuzzle}
-            onJumpToRound={devJumpToRound}
-            onSkipMemoriseTimer={devSkipMemoriseTimer}
-          />
-        )}
 
         <main className="flex-1 flex flex-col">
           {isTutorialOpen ? (
@@ -222,6 +202,7 @@ export function App({ overrideChallengeId }: AppProps = {}) {
               session.phase === 'round-failure') &&
             latestRoundResult ? (
             <RoundResultScreen
+              challengeId={challenge.challengeId}
               config={currentRoundConfig}
               puzzle={currentRoundPuzzle}
               result={latestRoundResult}
@@ -270,7 +251,6 @@ export function App({ overrideChallengeId }: AppProps = {}) {
         onToggleSymbols={setSymbolsEnabled}
         onToggleSound={setSoundEnabled}
         onToggleReducedMotion={setReducedMotionOverride}
-        onToggleDevMode={setDevModeEnabled}
         onOpenTutorial={openTutorial}
       />
     </div>

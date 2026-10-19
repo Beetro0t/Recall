@@ -147,5 +147,4 @@ export interface PlayerPreferences {
   symbolsEnabled: boolean;
   reducedMotionOverride: boolean | null;
   hasCompletedOnboarding: boolean;
-  devModeEnabled: boolean;
 }

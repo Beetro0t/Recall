@@ -1,4 +1,4 @@
-import { Eye, HelpCircle, Home, Settings, Terminal } from 'lucide-react';
+import { Eye, HelpCircle, Home, Settings } from 'lucide-react';
 import { ROUND_CONFIGS } from '../game/config';
 
 export interface RoundHeaderProps {
@@ -7,8 +7,6 @@ export interface RoundHeaderProps {
   subtitle?: string;
   showHomeButton?: boolean;
   showReviewButton?: boolean;
-  devModeEnabled?: boolean;
-  onToggleDevMode?: () => void;
   onNavigateHome?: () => void;
   onOpenReview?: () => void;
   onOpenSettings: () => void;
@@ -21,8 +19,6 @@ export function RoundHeader({
   subtitle,
   showHomeButton = false,
   showReviewButton = false,
-  devModeEnabled = false,
-  onToggleDevMode,
   onNavigateHome,
   onOpenReview,
   onOpenSettings,
@@ -98,25 +94,6 @@ export function RoundHeader({
       )}
 
       <div className="flex items-center gap-1">
-        {onToggleDevMode && (
-          <button
-            type="button"
-            onClick={onToggleDevMode}
-            aria-label="Toggle Dev Mode"
-            aria-pressed={devModeEnabled}
-            title="Toggle Dev Mode"
-            data-testid="header-dev-mode-button"
-            className={`h-8 px-2.5 rounded-full inline-flex items-center justify-center gap-1 text-[11px] font-semibold transition-colors cursor-pointer focus-ring border ${
-              devModeEnabled
-                ? 'bg-white text-[#050507] border-white'
-                : 'bg-transparent text-white/55 border-transparent hover:text-white hover:bg-white/[0.06]'
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>DEV</span>
-          </button>
-        )}
-
         {showHomeButton && onNavigateHome && (
           <button
             type="button"

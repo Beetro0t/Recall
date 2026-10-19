@@ -10,7 +10,6 @@ export interface SettingsModalProps {
   onToggleSymbols: (enabled: boolean) => void;
   onToggleSound: (enabled: boolean) => void;
   onToggleReducedMotion: (override: boolean | null) => void;
-  onToggleDevMode: (enabled: boolean) => void;
   onOpenTutorial: () => void;
 }
 
@@ -22,7 +21,6 @@ export function SettingsModal({
   onToggleSymbols,
   onToggleSound,
   onToggleReducedMotion,
-  onToggleDevMode,
   onOpenTutorial,
 }: SettingsModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -44,17 +42,17 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-modal-title"
       data-testid="settings-modal"
     >
-      <div className="w-full max-w-[400px] rounded-[18px] bg-[#1B1D22] border border-[#30333B] p-5 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-[#30333B]">
+      <div className="w-full max-w-[400px] rounded-[24px] bg-[#0B0C10] border border-white/[0.12] p-5 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <h2
             id="settings-modal-title"
-            className="text-lg font-semibold text-[#F5F5F7]"
+            className="text-lg font-semibold tracking-[-0.02em] text-white"
           >
             Settings & Accessibility
           </h2>
@@ -64,7 +62,7 @@ export function SettingsModal({
             onClick={onClose}
             aria-label="Close settings"
             data-testid="close-settings-button"
-            className="w-9 h-9 rounded-[10px] inline-flex items-center justify-center text-[#9297A3] hover:text-[#F5F5F7] hover:bg-[#24262D] cursor-pointer focus-ring"
+            className="w-8 h-8 rounded-full inline-flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] cursor-pointer focus-ring"
           >
             <X className="w-4 h-4" />
           </button>
@@ -76,12 +74,12 @@ export function SettingsModal({
             <div>
               <label
                 htmlFor="toggle-sound"
-                className="text-sm font-medium text-[#F5F5F7] block cursor-pointer"
+                className="text-sm font-medium text-white block cursor-pointer"
               >
                 Sound & Tactile Feedback
               </label>
-              <span className="text-xs text-[#9297A3]">
-                Tactile audio tones for tile selection, swaps, and completion
+              <span className="text-xs text-white/55">
+                Tactile audio tones for tile selection, placement, and completion
               </span>
             </div>
             <button
@@ -92,11 +90,11 @@ export function SettingsModal({
               data-testid="toggle-sound"
               onClick={() => onToggleSound(!preferences.soundEnabled)}
               className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 focus-ring ${
-                preferences.soundEnabled ? 'bg-[#91ADFF]' : 'bg-[#24262D]'
+                preferences.soundEnabled ? 'bg-[#55EFC4]' : 'bg-white/[0.12]'
               }`}
             >
               <span
-                className={`block w-5 h-5 rounded-full bg-[#101114] transition-transform ${
+                className={`block w-5 h-5 rounded-full bg-[#050507] transition-transform ${
                   preferences.soundEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
@@ -108,11 +106,11 @@ export function SettingsModal({
             <div>
               <label
                 htmlFor="toggle-symbols"
-                className="text-sm font-medium text-[#F5F5F7] block cursor-pointer"
+                className="text-sm font-medium text-white block cursor-pointer"
               >
                 Tile Symbols Overlay
               </label>
-              <span className="text-xs text-[#9297A3]">
+              <span className="text-xs text-white/55">
                 Display geometric icons on tiles for colour-independent play
               </span>
             </div>
@@ -124,11 +122,11 @@ export function SettingsModal({
               data-testid="toggle-symbols"
               onClick={() => onToggleSymbols(!preferences.symbolsEnabled)}
               className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 focus-ring ${
-                preferences.symbolsEnabled ? 'bg-[#91ADFF]' : 'bg-[#24262D]'
+                preferences.symbolsEnabled ? 'bg-[#55EFC4]' : 'bg-white/[0.12]'
               }`}
             >
               <span
-                className={`block w-5 h-5 rounded-full bg-[#101114] transition-transform ${
+                className={`block w-5 h-5 rounded-full bg-[#050507] transition-transform ${
                   preferences.symbolsEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
@@ -140,11 +138,11 @@ export function SettingsModal({
             <div>
               <label
                 htmlFor="toggle-reduced-motion"
-                className="text-sm font-medium text-[#F5F5F7] block cursor-pointer"
+                className="text-sm font-medium text-white block cursor-pointer"
               >
                 Reduced Motion
               </label>
-              <span className="text-xs text-[#9297A3]">
+              <span className="text-xs text-white/55">
                 Minimise tile movement and transition animations
               </span>
             </div>
@@ -156,51 +154,19 @@ export function SettingsModal({
               data-testid="toggle-reduced-motion"
               onClick={() => onToggleReducedMotion(!shouldReduceMotion)}
               className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 focus-ring ${
-                shouldReduceMotion ? 'bg-[#91ADFF]' : 'bg-[#24262D]'
+                shouldReduceMotion ? 'bg-[#55EFC4]' : 'bg-white/[0.12]'
               }`}
             >
               <span
-                className={`block w-5 h-5 rounded-full bg-[#101114] transition-transform ${
+                className={`block w-5 h-5 rounded-full bg-[#050507] transition-transform ${
                   shouldReduceMotion ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Developer Mode toggle */}
-          <div className="flex items-center justify-between gap-4 pt-2 border-t border-[#30333B]/70">
-            <div>
-              <label
-                htmlFor="toggle-dev-mode"
-                className="text-sm font-medium text-[#F5F5F7] block cursor-pointer"
-              >
-                Developer Testing Mode
-              </label>
-              <span className="text-xs text-[#9297A3]">
-                Unlimited replays, new puzzle seeds, round jumps, and timer skip
-              </span>
-            </div>
-            <button
-              id="toggle-dev-mode"
-              type="button"
-              role="switch"
-              aria-checked={preferences.devModeEnabled}
-              data-testid="toggle-dev-mode"
-              onClick={() => onToggleDevMode(!preferences.devModeEnabled)}
-              className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 focus-ring ${
-                preferences.devModeEnabled ? 'bg-[#91ADFF]' : 'bg-[#24262D]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-[#101114] transition-transform ${
-                  preferences.devModeEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
             </button>
           </div>
         </div>
 
-        <div className="pt-3 border-t border-[#30333B] flex items-center justify-between gap-3">
+        <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => {
@@ -208,11 +174,11 @@ export function SettingsModal({
               onOpenTutorial();
             }}
             data-testid="settings-how-to-play"
-            className="text-xs font-medium text-[#91ADFF] hover:underline cursor-pointer focus-ring rounded px-1 py-1"
+            className="text-xs font-medium text-[#55EFC4] hover:underline cursor-pointer focus-ring rounded px-1 py-1"
           >
             How to play & practice
           </button>
-          <span className="text-[11px] text-[#9297A3]">Daily rollover: 00:00 UTC</span>
+          <span className="text-[11px] text-white/45">Daily rollover: 00:00 UTC</span>
         </div>
       </div>
     </div>

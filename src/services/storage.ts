@@ -27,9 +27,9 @@ import type {
 } from '../game/types';
 
 export const STORAGE_KEYS = {
-  SESSION: 'recall_session_v1',
-  STATS: 'recall_stats_v1',
-  PREFERENCES: 'recall_preferences_v2',
+  SESSION: 'recall_session_v3',
+  STATS: 'recall_stats_v3',
+  PREFERENCES: 'recall_preferences_v3',
 } as const;
 
 const VALID_PHASES: readonly GamePhase[] = [
@@ -87,7 +87,6 @@ export const DEFAULT_PREFERENCES: PlayerPreferences = {
   symbolsEnabled: false,
   reducedMotionOverride: null,
   hasCompletedOnboarding: false,
-  devModeEnabled: false,
 };
 
 export const DEFAULT_STATS: PlayerStats = {
@@ -267,10 +266,6 @@ export function loadPreferences(): PlayerPreferences {
         typeof parsed.hasCompletedOnboarding === 'boolean'
           ? parsed.hasCompletedOnboarding
           : DEFAULT_PREFERENCES.hasCompletedOnboarding,
-      devModeEnabled:
-        typeof parsed.devModeEnabled === 'boolean'
-          ? parsed.devModeEnabled
-          : DEFAULT_PREFERENCES.devModeEnabled,
     };
   } catch {
     return { ...DEFAULT_PREFERENCES };

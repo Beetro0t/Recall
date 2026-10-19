@@ -8,7 +8,6 @@ export interface UsePreferencesReturn {
   setSoundEnabled: (enabled: boolean) => void;
   setSymbolsEnabled: (enabled: boolean) => void;
   setReducedMotionOverride: (override: boolean | null) => void;
-  setDevModeEnabled: (enabled: boolean) => void;
   markOnboardingComplete: () => void;
 }
 
@@ -72,16 +71,6 @@ export function usePreferences(): UsePreferencesReturn {
     [updatePreferences],
   );
 
-  const setDevModeEnabled = useCallback(
-    (enabled: boolean) => {
-      updatePreferences((prev) => ({
-        ...prev,
-        devModeEnabled: enabled,
-      }));
-    },
-    [updatePreferences],
-  );
-
   const markOnboardingComplete = useCallback(() => {
     updatePreferences((prev) => ({
       ...prev,
@@ -100,7 +89,6 @@ export function usePreferences(): UsePreferencesReturn {
     setSoundEnabled,
     setSymbolsEnabled,
     setReducedMotionOverride,
-    setDevModeEnabled,
     markOnboardingComplete,
   };
 }

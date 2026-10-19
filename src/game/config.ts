@@ -3,12 +3,13 @@ import type { BoardPattern, RoundConfig, TilePaletteItem } from './types';
 export const PRODUCT_ID = 'recall';
 export const PUZZLE_VERSION = 'puzzle-v2';
 export const SCORING_VERSION = 'score-v2';
-export const STORAGE_SCHEMA_VERSION = 2;
+export const STORAGE_SCHEMA_VERSION = 3;
 
 /**
  * Epoch date used to compute deterministic Daily Challenge numbers (#001, #002, ...).
+ * Reset to 2026-10-19 so launch day starts at #001.
  */
-export const EPOCH_START_UTC_DATE = '2026-01-01';
+export const EPOCH_START_UTC_DATE = '2026-10-19';
 
 /**
  * Duration of the brief conceal transition between memorising and recreating.

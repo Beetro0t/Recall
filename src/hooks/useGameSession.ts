@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getRoundConfig, ROUND_CONFIGS } from '../game/config';
-import {
-  challengeIdToUtcEpochMs,
-  getEffectiveCurrentStreak,
-  getUtcChallengeId,
-} from '../game/dailyChallenge';
+import { getEffectiveCurrentStreak, getUtcChallengeId } from '../game/dailyChallenge';
 import { generateDailyChallenge } from '../game/puzzleGenerator';
 import {
   advanceAfterRoundResult,
-  createInitialSession,
   expireRecreationPhase,
   getRoundPuzzle,
   lockInRoundSolution,
@@ -31,7 +26,10 @@ import type {
 } from '../game/types';
 import { playFeedback } from '../services/audio';
 import {
-  clearChallengeCompletionAndSession,
+  recordDailyPlayerChoices,
+  recordRoundPlayerChoices,
+} from '../services/communityStats';
+import {
   loadOrInitializeSession,
   loadPlayerStats,
   recordDailyChallengeCompletion,
@@ -79,11 +77,6 @@ export interface UseGameSessionReturn {
   handleLockInSolution: () => void;
   handleContinueFromRoundEnd: () => void;
   handleBeginNextRound: () => void;
-  /* Dev Mode helpers */
-  devResetAndReplay: () => void;
-  devNextDailyPuzzle: () => void;
-  devJumpToRound: (roundId: number) => void;
-  devSkipMemoriseTimer: () => void;
 }
 
 export function useGameSession({
@@ -92,8 +85,9 @@ export function useGameSession({
   onCompleteOnboarding,
   overrideChallengeId,
 }: UseGameSessionOptions): UseGameSessionReturn {
-  const [challengeId, setChallengeId] = useState<string>(
+  const challengeId = useMemo(
     () => overrideChallengeId ?? getUtcChallengeId(),
+    [overrideChallengeId],
   );
 
   const challenge = useMemo(() => generateDailyChallenge(challengeId), [challengeId]);
@@ -115,7 +109,17 @@ export function useGameSession({
       setSession((prev) => {
         const next = updater(prev);
         saveGameSession(next);
+
+        // If a new round result was just recorded, log the player's choices
+        if (next.results.length > prev.results.length) {
+          const newestResult = next.results[next.results.length - 1];
+          if (newestResult) {
+            recordRoundPlayerChoices(challenge.challengeId, newestResult, Date.now());
+          }
+        }
+
         if (next.phase === 'results' && next.results.length === ROUND_CONFIGS.length) {
+          recordDailyPlayerChoices(challenge.challengeId, next.results);
           const updatedStats = recordDailyChallengeCompletion(
             challenge,
             next.results,
@@ -616,83 +620,6 @@ export function useGameSession({
     });
   }, [challenge, persistAndUpdateSession]);
 
-  /* ============================================================================
-   * Dev Mode Testing Controls
-   * ============================================================================ */
-
-  const devResetAndReplay = useCallback(() => {
-    setSelectedTileId(null);
-    setSelectedSlotIndex(null);
-    setIsReviewOpen(false);
-    setIsTutorialOpen(false);
-    setIsHomeOverlayOpen(false);
-    const { session: freshSession, stats: updatedStats } =
-      clearChallengeCompletionAndSession(challenge);
-    setStats(updatedStats);
-    const started = startRoundMemorisation(freshSession, challenge, Date.now());
-    saveGameSession(started);
-    setSession(started);
-    setAnnouncement('Dev Mode: Reset daily challenge and restarted Round 1.');
-  }, [challenge]);
-
-  const devNextDailyPuzzle = useCallback(() => {
-    setSelectedTileId(null);
-    setSelectedSlotIndex(null);
-    setIsReviewOpen(false);
-    setIsTutorialOpen(false);
-    setIsHomeOverlayOpen(false);
-
-    const nextDayEpochMs = challengeIdToUtcEpochMs(challengeId) + 86_400_000;
-    const nextDateStr = getUtcChallengeId(nextDayEpochMs);
-    const nextChallenge = generateDailyChallenge(nextDateStr);
-    const { session: freshSession, stats: updatedStats } =
-      clearChallengeCompletionAndSession(nextChallenge);
-
-    setChallengeId(nextDateStr);
-    setStats(updatedStats);
-    const started = startRoundMemorisation(freshSession, nextChallenge, Date.now());
-    saveGameSession(started);
-    setSession(started);
-    setAnnouncement(`Dev Mode: Loaded next daily puzzle (${nextDateStr}).`);
-  }, [challengeId]);
-
-  const devJumpToRound = useCallback(
-    (roundId: number) => {
-      if (!ROUND_CONFIGS.some((r) => r.roundId === roundId)) return;
-      setSelectedTileId(null);
-      setSelectedSlotIndex(null);
-      setIsReviewOpen(false);
-      setIsTutorialOpen(false);
-      setIsHomeOverlayOpen(false);
-
-      const { stats: updatedStats } = clearChallengeCompletionAndSession(challenge);
-      setStats(updatedStats);
-
-      const base = createInitialSession(challenge);
-      const customSession: GameSession = {
-        ...base,
-        currentRoundId: roundId,
-        results: session.results.filter((r) => r.roundId < roundId),
-      };
-      const started = startRoundMemorisation(customSession, challenge, Date.now());
-      saveGameSession(started);
-      setSession(started);
-      setAnnouncement(`Dev Mode: Jumped to Round ${roundId}.`);
-    },
-    [challenge, session.results],
-  );
-
-  const devSkipMemoriseTimer = useCallback(() => {
-    setSelectedTileId(null);
-    setSelectedSlotIndex(null);
-    persistAndUpdateSession((prev) => {
-      if (prev.phase === 'memorising' || prev.phase === 'concealing') {
-        return startRecreatingPhase(prev, challenge, Date.now());
-      }
-      return prev;
-    });
-  }, [challenge, persistAndUpdateSession]);
-
   return {
     challenge,
     session,
@@ -727,9 +654,5 @@ export function useGameSession({
     handleLockInSolution,
     handleContinueFromRoundEnd,
     handleBeginNextRound,
-    devResetAndReplay,
-    devNextDailyPuzzle,
-    devJumpToRound,
-    devSkipMemoriseTimer,
   };
 }
