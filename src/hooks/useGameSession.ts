@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getRoundConfig, ROUND_CONFIGS } from '../game/config';
-import { getEffectiveCurrentStreak, getUtcChallengeId } from '../game/dailyChallenge';
+import { getRoundConfig, PUZZLE_VERSION, ROUND_CONFIGS } from '../game/config';
+import {
+  challengeIdToUtcEpochMs,
+  getEffectiveCurrentStreak,
+  getUtcChallengeId,
+  isValidChallengeId,
+} from '../game/dailyChallenge';
 import { generateDailyChallenge } from '../game/puzzleGenerator';
 import {
   advanceAfterRoundResult,
+  createInitialSession,
   expireRecreationPhase,
   getRoundPuzzle,
   lockInRoundSolution,
@@ -30,6 +36,7 @@ import {
   recordRoundPlayerChoices,
 } from '../services/communityStats';
 import {
+  clearChallengeCompletionAndSession,
   loadOrInitializeSession,
   loadPlayerStats,
   recordDailyChallengeCompletion,
@@ -45,6 +52,7 @@ export interface UseGameSessionOptions {
 
 export interface UseGameSessionReturn {
   challenge: DailyChallenge;
+  customSeed: string | null;
   session: GameSession;
   stats: PlayerStats;
   effectiveStreak: number;
@@ -77,6 +85,14 @@ export interface UseGameSessionReturn {
   handleLockInSolution: () => void;
   handleContinueFromRoundEnd: () => void;
   handleBeginNextRound: () => void;
+  /* Authenticated Admin-Only Controls */
+  adminResetAndReplay: () => void;
+  adminStepDailyDate: (deltaDays: number) => void;
+  adminSetChallengeDate: (dateStr: string) => boolean;
+  adminSetCustomSeed: (seedStr: string | null) => void;
+  adminJumpToRound: (roundId: number) => void;
+  adminSkipMemoriseTimer: () => void;
+  adminAutoFillCurrentBoard: () => void;
 }
 
 export function useGameSession({
@@ -85,12 +101,19 @@ export function useGameSession({
   onCompleteOnboarding,
   overrideChallengeId,
 }: UseGameSessionOptions): UseGameSessionReturn {
-  const challengeId = useMemo(
+  const [challengeId, setChallengeId] = useState<string>(
     () => overrideChallengeId ?? getUtcChallengeId(),
-    [overrideChallengeId],
   );
+  const [customSeed, setCustomSeed] = useState<string | null>(null);
 
-  const challenge = useMemo(() => generateDailyChallenge(challengeId), [challengeId]);
+  const effectivePuzzleVersion = customSeed
+    ? `${PUZZLE_VERSION}|custom:${customSeed}`
+    : PUZZLE_VERSION;
+
+  const challenge = useMemo(
+    () => generateDailyChallenge(challengeId, effectivePuzzleVersion),
+    [challengeId, effectivePuzzleVersion],
+  );
 
   const [session, setSession] = useState<GameSession>(() =>
     loadOrInitializeSession(challenge, Date.now()),
@@ -110,7 +133,6 @@ export function useGameSession({
         const next = updater(prev);
         saveGameSession(next);
 
-        // If a new round result was just recorded, log the player's choices
         if (next.results.length > prev.results.length) {
           const newestResult = next.results[next.results.length - 1];
           if (newestResult) {
@@ -401,7 +423,6 @@ export function useGameSession({
         return;
       }
 
-      // If an empty board square was already targeted first, place this slider colour straight into it!
       if (selectedSlotIndex !== null) {
         handlePlaceTileInSlot(tileId, selectedSlotIndex);
         return;
@@ -447,22 +468,17 @@ export function useGameSession({
         return;
       }
 
-      // If a tile (from the slider bar or another board square) is currently selected:
       if (selectedTileId !== null) {
-        // Clicking the same placed board tile again deselects it
         if (occupantTileId === selectedTileId) {
           setSelectedTileId(null);
           playFeedback('select', soundEnabled);
           return;
         }
-        // Place/swap the selected tile into this board square!
         handlePlaceTileInSlot(selectedTileId, slotIndex);
         return;
       }
 
-      // No tile is currently selected:
       if (occupantTileId) {
-        // Select the placed tile on the board so the player can move or swap it
         setSelectedSlotIndex(null);
         setSelectedTileId(occupantTileId);
         playFeedback('select', soundEnabled);
@@ -471,7 +487,6 @@ export function useGameSession({
           setAnnouncement(`Selected ${tile.colorName} at square ${slotIndex + 1}.`);
         }
       } else {
-        // Empty square tapped when no tile is selected: highlight this square as target!
         if (selectedSlotIndex === slotIndex) {
           setSelectedSlotIndex(null);
           playFeedback('select', soundEnabled);
@@ -620,8 +635,156 @@ export function useGameSession({
     });
   }, [challenge, persistAndUpdateSession]);
 
+  /* ============================================================================
+   * Authenticated Admin-Only Controls (hidden behind #admin login gate)
+   * ============================================================================ */
+
+  const adminResetAndReplay = useCallback(() => {
+    setSelectedTileId(null);
+    setSelectedSlotIndex(null);
+    setIsReviewOpen(false);
+    setIsTutorialOpen(false);
+    setIsHomeOverlayOpen(false);
+    const { session: freshSession, stats: updatedStats } =
+      clearChallengeCompletionAndSession(challenge);
+    setStats(updatedStats);
+    const started = startRoundMemorisation(freshSession, challenge, Date.now());
+    saveGameSession(started);
+    setSession(started);
+  }, [challenge]);
+
+  const adminStepDailyDate = useCallback(
+    (deltaDays: number) => {
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+      setIsReviewOpen(false);
+      setIsTutorialOpen(false);
+      setIsHomeOverlayOpen(false);
+
+      const targetEpochMs =
+        challengeIdToUtcEpochMs(challengeId) + deltaDays * 86_400_000;
+      const nextDateStr = getUtcChallengeId(targetEpochMs);
+      const nextChallenge = generateDailyChallenge(nextDateStr, effectivePuzzleVersion);
+      const { session: freshSession, stats: updatedStats } =
+        clearChallengeCompletionAndSession(nextChallenge);
+
+      setChallengeId(nextDateStr);
+      setStats(updatedStats);
+      const started = startRoundMemorisation(freshSession, nextChallenge, Date.now());
+      saveGameSession(started);
+      setSession(started);
+    },
+    [challengeId, effectivePuzzleVersion],
+  );
+
+  const adminSetChallengeDate = useCallback(
+    (dateStr: string): boolean => {
+      const trimmed = dateStr.trim();
+      if (!isValidChallengeId(trimmed)) {
+        return false;
+      }
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+      setIsReviewOpen(false);
+      setIsTutorialOpen(false);
+      setIsHomeOverlayOpen(false);
+
+      const nextChallenge = generateDailyChallenge(trimmed, effectivePuzzleVersion);
+      const { session: freshSession, stats: updatedStats } =
+        clearChallengeCompletionAndSession(nextChallenge);
+
+      setChallengeId(trimmed);
+      setStats(updatedStats);
+      const started = startRoundMemorisation(freshSession, nextChallenge, Date.now());
+      saveGameSession(started);
+      setSession(started);
+      return true;
+    },
+    [effectivePuzzleVersion],
+  );
+
+  const adminSetCustomSeed = useCallback(
+    (seedStr: string | null) => {
+      const normalized = seedStr && seedStr.trim().length > 0 ? seedStr.trim() : null;
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+      setIsReviewOpen(false);
+      setIsTutorialOpen(false);
+      setIsHomeOverlayOpen(false);
+
+      const nextPuzzleVer = normalized
+        ? `${PUZZLE_VERSION}|custom:${normalized}`
+        : PUZZLE_VERSION;
+      const nextChallenge = generateDailyChallenge(challengeId, nextPuzzleVer);
+      const { session: freshSession, stats: updatedStats } =
+        clearChallengeCompletionAndSession(nextChallenge);
+
+      setCustomSeed(normalized);
+      setStats(updatedStats);
+      const started = startRoundMemorisation(freshSession, nextChallenge, Date.now());
+      saveGameSession(started);
+      setSession(started);
+    },
+    [challengeId],
+  );
+
+  const adminJumpToRound = useCallback(
+    (roundId: number) => {
+      if (!ROUND_CONFIGS.some((r) => r.roundId === roundId)) return;
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+      setIsReviewOpen(false);
+      setIsTutorialOpen(false);
+      setIsHomeOverlayOpen(false);
+
+      const { stats: updatedStats } = clearChallengeCompletionAndSession(challenge);
+      setStats(updatedStats);
+
+      const base = createInitialSession(challenge);
+      const customSession: GameSession = {
+        ...base,
+        currentRoundId: roundId,
+        results: session.results.filter((r) => r.roundId < roundId),
+      };
+      const started = startRoundMemorisation(customSession, challenge, Date.now());
+      saveGameSession(started);
+      setSession(started);
+    },
+    [challenge, session.results],
+  );
+
+  const adminSkipMemoriseTimer = useCallback(() => {
+    setSelectedTileId(null);
+    setSelectedSlotIndex(null);
+    persistAndUpdateSession((prev) => {
+      if (prev.phase === 'memorising' || prev.phase === 'concealing') {
+        return startRecreatingPhase(prev, challenge, Date.now());
+      }
+      return prev;
+    });
+  }, [challenge, persistAndUpdateSession]);
+
+  const adminAutoFillCurrentBoard = useCallback(() => {
+    setSelectedTileId(null);
+    setSelectedSlotIndex(null);
+    persistAndUpdateSession((prev) => {
+      const roundPuzzle = getRoundPuzzle(challenge, prev.currentRoundId);
+      const ready =
+        prev.phase === 'memorising' || prev.phase === 'concealing'
+          ? startRecreatingPhase(prev, challenge, Date.now())
+          : prev;
+      if (ready.phase !== 'recreating') return ready;
+      return {
+        ...ready,
+        currentTileOrder: [...roundPuzzle.targetOrder],
+        swapCount: roundPuzzle.optimalSwaps,
+      };
+    });
+  }, [challenge, persistAndUpdateSession]);
+
   return {
     challenge,
+    customSeed,
     session,
     stats,
     effectiveStreak,
@@ -654,5 +817,12 @@ export function useGameSession({
     handleLockInSolution,
     handleContinueFromRoundEnd,
     handleBeginNextRound,
+    adminResetAndReplay,
+    adminStepDailyDate,
+    adminSetChallengeDate,
+    adminSetCustomSeed,
+    adminJumpToRound,
+    adminSkipMemoriseTimer,
+    adminAutoFillCurrentBoard,
   };
 }

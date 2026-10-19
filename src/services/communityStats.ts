@@ -386,6 +386,28 @@ export function getDailyCommunityComparison(
   };
 }
 
+export interface AdminCommunitySnapshot {
+  currentPlayerId: string;
+  activeChallengeData: StoredDailyCommunityData;
+  allChallengesCount: number;
+  rawAllData: Record<string, StoredDailyCommunityData>;
+}
+
+export function getAdminCommunitySnapshot(challengeId: string): AdminCommunitySnapshot {
+  const all = loadAllStoredCommunityData();
+  const activeChallengeData = all[challengeId] ?? {
+    challengeId,
+    roundSubmissions: { 1: [], 2: [], 3: [] },
+    dailySubmissions: [],
+  };
+  return {
+    currentPlayerId: getOrCreateAnonymousPlayerId(),
+    activeChallengeData,
+    allChallengesCount: Object.keys(all).length,
+    rawAllData: all,
+  };
+}
+
 export function clearCommunityStorageForTesting(): void {
   memoryCommunityStore.clear();
   try {

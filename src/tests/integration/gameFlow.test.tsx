@@ -280,4 +280,47 @@ describe('Recall Integration Game Flows', () => {
       'true',
     );
   });
+
+  it('keeps the Owner Dev Console completely hidden from the public and unlocks via #admin or Ctrl+Shift+D with passcode login', () => {
+    render(<App overrideChallengeId="2026-10-19" />);
+
+    // Completely invisible to the public by default
+    expect(screen.queryByTestId('admin-portal-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('admin-floating-bar')).not.toBeInTheDocument();
+
+    // Trigger via secret keyboard shortcut Ctrl+Shift+D
+    fireEvent.keyDown(window, { key: 'D', ctrlKey: true, shiftKey: true });
+    expect(screen.getByTestId('admin-portal-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-passcode-input')).toBeInTheDocument();
+
+    // Wrong passcode is rejected
+    fireEvent.change(screen.getByTestId('admin-passcode-input'), {
+      target: { value: 'wrong-pass' },
+    });
+    fireEvent.click(screen.getByTestId('admin-login-submit'));
+    expect(screen.getByTestId('admin-auth-error')).toBeInTheDocument();
+
+    // Correct owner passcode unlocks the console and floating bar
+    fireEvent.change(screen.getByTestId('admin-passcode-input'), {
+      target: { value: 'recall-admin' },
+    });
+    fireEvent.click(screen.getByTestId('admin-login-submit'));
+
+    expect(screen.getByTestId('admin-floating-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-telemetry-section')).toBeInTheDocument();
+
+    // Test applying a custom seed from the console
+    fireEvent.change(screen.getByTestId('admin-seed-input'), {
+      target: { value: 'custom-test-seed' },
+    });
+    fireEvent.click(screen.getByTestId('admin-apply-seed'));
+    expect(screen.getByTestId('admin-floating-bar')).toHaveTextContent(
+      'custom-test-seed',
+    );
+
+    // Lock & Hide removes all admin UI from the page again
+    fireEvent.click(screen.getByTestId('admin-logout-button'));
+    expect(screen.queryByTestId('admin-portal-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('admin-floating-bar')).not.toBeInTheDocument();
+  });
 });

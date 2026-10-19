@@ -3,6 +3,7 @@ import { ROUND_CONFIGS } from '../game/config';
 import { calculateDailyTotalScore } from '../game/scoring';
 import { useGameSession } from '../hooks/useGameSession';
 import { usePreferences } from '../hooks/usePreferences';
+import { AdminPortalModal } from '../components/AdminPortalModal';
 import { ReviewModal } from '../components/ReviewModal';
 import { RoundHeader } from '../components/RoundHeader';
 import { SettingsModal } from '../components/SettingsModal';
@@ -30,6 +31,7 @@ export function App({ overrideChallengeId }: AppProps = {}) {
 
   const {
     challenge,
+    customSeed,
     session,
     stats,
     effectiveStreak,
@@ -62,6 +64,13 @@ export function App({ overrideChallengeId }: AppProps = {}) {
     handleLockInSolution,
     handleContinueFromRoundEnd,
     handleBeginNextRound,
+    adminResetAndReplay,
+    adminStepDailyDate,
+    adminSetChallengeDate,
+    adminSetCustomSeed,
+    adminJumpToRound,
+    adminSkipMemoriseTimer,
+    adminAutoFillCurrentBoard,
   } = useGameSession({
     soundEnabled: preferences.soundEnabled,
     hasCompletedOnboarding: preferences.hasCompletedOnboarding,
@@ -140,6 +149,22 @@ export function App({ overrideChallengeId }: AppProps = {}) {
           onOpenTutorial={
             showingHome || session.phase === 'results' ? openTutorial : undefined
           }
+        />
+
+        {/* Hidden Owner Admin & Dev Console (only renders when accessed via #admin / Ctrl+Shift+D and unlocked) */}
+        <AdminPortalModal
+          challenge={challenge}
+          customSeed={customSeed}
+          currentRoundId={session.currentRoundId}
+          phase={session.phase}
+          stats={stats}
+          onResetAndReplay={adminResetAndReplay}
+          onStepDailyDate={adminStepDailyDate}
+          onSetChallengeDate={adminSetChallengeDate}
+          onSetCustomSeed={adminSetCustomSeed}
+          onJumpToRound={adminJumpToRound}
+          onSkipMemoriseTimer={adminSkipMemoriseTimer}
+          onAutoFillCurrentBoard={adminAutoFillCurrentBoard}
         />
 
         <main className="flex-1 flex flex-col">
