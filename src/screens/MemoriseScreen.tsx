@@ -52,7 +52,7 @@ export function MemoriseScreen({
       data-testid="memorise-screen"
     >
       {/* Top countdown bar */}
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         <Countdown
           deadlineEpochMs={isConcealing ? null : deadlineEpochMs}
           totalDurationMs={config.memoriseMs}
@@ -62,10 +62,10 @@ export function MemoriseScreen({
         />
 
         {/* Telemetry bar matching RecreateScreen */}
-        <div className="flex items-center justify-between text-xs h-7 px-3 rounded-[10px] bg-[#16181E] border border-[#2D313B] text-[#9297A3]">
+        <div className="flex items-center justify-between text-xs h-7 px-3 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">
           <span>
             Pattern:{' '}
-            <strong className="text-[#F5F5F7] font-medium">
+            <strong className="text-white font-medium">
               {puzzle.pattern.patternName}
             </strong>
           </span>
@@ -92,10 +92,12 @@ export function MemoriseScreen({
       {/* Footer instruction */}
       <div className="text-center py-2 min-h-[52px] flex items-center justify-center">
         <p
-          className="text-sm font-medium text-[#9297A3]"
+          className="text-sm font-medium text-white/60 tracking-[-0.01em]"
           data-testid="phase-instruction"
         >
-          {isConcealing ? 'Shuffling tiles…' : 'Remember this arrangement.'}
+          {isConcealing
+            ? 'Dropping colours to slider bar…'
+            : 'Remember this arrangement before the squares clear.'}
         </p>
       </div>
     </section>

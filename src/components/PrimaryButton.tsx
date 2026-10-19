@@ -15,19 +15,19 @@ export function PrimaryButton({
 }: PrimaryButtonProps) {
   const variantClasses =
     variant === 'primary'
-      ? 'bg-[#91ADFF] text-[#101114] hover:bg-[#A3BCFF] active:scale-[0.985] font-semibold'
+      ? 'bg-white text-[#050507] hover:bg-[#F2F4F8] hover:scale-[1.012] active:scale-[0.975] font-semibold tracking-[-0.02em] shadow-[0_10px_28px_rgba(255,255,255,0.14)]'
       : variant === 'secondary'
-        ? 'bg-[#24262D] text-[#F5F5F7] border border-[#30333B] hover:bg-[#2C2F38] active:scale-[0.985] font-medium'
-        : 'bg-transparent text-[#9297A3] hover:text-[#F5F5F7] hover:bg-[#1B1D22] font-medium';
+        ? 'bg-white/[0.06] text-white border border-white/[0.12] hover:bg-white/[0.1] hover:border-white/[0.2] active:scale-[0.98] font-medium tracking-[-0.01em]'
+        : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.05] font-medium tracking-[-0.01em]';
 
   return (
     <button
       type="button"
       className={`
-        min-h-[52px] px-5 rounded-[12px] text-[15px]
+        min-h-[50px] px-6 rounded-full text-[15px]
         inline-flex items-center justify-center gap-2
-        transition-all duration-100 cursor-pointer no-select focus-ring
-        disabled:opacity-50 disabled:pointer-events-none
+        transition-all duration-150 cursor-pointer no-select focus-ring
+        disabled:opacity-45 disabled:pointer-events-none
         ${fullWidth ? 'w-full' : ''}
         ${variantClasses}
         ${className}

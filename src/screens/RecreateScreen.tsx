@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Lock } from 'lucide-react';
+import { countPlacedTiles } from '../game/board';
 import type { RoundConfig, RoundPuzzle } from '../game/types';
+import { ColorSliderBar } from '../components/ColorSliderBar';
 import { Countdown } from '../components/Countdown';
 import { GameBoard } from '../components/GameBoard';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -10,10 +13,16 @@ export interface RecreateScreenProps {
   currentTileOrder: readonly string[];
   swapCount: number;
   selectedTileId: string | null;
+  selectedSlotIndex: number | null;
   deadlineEpochMs: number | null;
   showSymbols: boolean;
   shouldReduceMotion: boolean;
   onTileActivate: (tileId: string) => void;
+  onSlotActivate: (slotIndex: number, tileId: string | null) => void;
+  onSelectSliderTile: (tileId: string) => void;
+  onPlaceTileInSlot: (tileId: string, slotIndex: number) => void;
+  onRemoveTileFromBoard: (slotIndex: number) => void;
+  onClearBoard: () => void;
   onDirectSwap: (tileIdA: string, tileIdB: string) => void;
   onLockInSolution: () => void;
   onRecreateExpire: () => void;
@@ -25,21 +34,44 @@ export function RecreateScreen({
   currentTileOrder,
   swapCount,
   selectedTileId,
+  selectedSlotIndex,
   deadlineEpochMs,
   showSymbols,
   shouldReduceMotion,
   onTileActivate,
+  onSlotActivate,
+  onSelectSliderTile,
+  onPlaceTileInSlot,
+  onRemoveTileFromBoard,
+  onClearBoard,
   onDirectSwap,
   onLockInSolution,
   onRecreateExpire,
 }: RecreateScreenProps) {
+  const [sliderHoveredSlotIndex, setSliderHoveredSlotIndex] = useState<number | null>(
+    null,
+  );
+
+  const placedCount = countPlacedTiles(currentTileOrder);
+  const totalCount = puzzle.targetOrder.length;
+  const allPlaced = placedCount === totalCount;
+
+  const instructionText =
+    selectedSlotIndex !== null
+      ? `Square ${selectedSlotIndex + 1} armed — tap or slide a colour below to fill it.`
+      : selectedTileId !== null
+        ? 'Colour armed — tap any empty square (or another tile to swap).'
+        : allPlaced
+          ? 'All squares filled! Drag to adjust or Lock In Solution.'
+          : 'Drag colours up from the slider bar, or tap a colour then tap an empty square.';
+
   return (
     <section
-      className="flex-1 flex flex-col justify-between py-2 gap-3"
+      className="flex-1 flex flex-col justify-between py-1.5 gap-2.5"
       data-testid="recreate-screen"
     >
       {/* Top countdown & pattern telemetry bar */}
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         <Countdown
           deadlineEpochMs={deadlineEpochMs}
           totalDurationMs={config.solveMs}
@@ -48,24 +80,37 @@ export function RecreateScreen({
           onExpire={onRecreateExpire}
         />
 
-        <div className="flex items-center justify-between text-xs h-7 px-3 rounded-[10px] bg-[#16181E] border border-[#2D313B]">
-          <span className="text-[#9297A3]">
+        <div className="flex items-center justify-between text-xs h-7 px-3 rounded-full bg-white/[0.04] border border-white/[0.08]">
+          <span className="text-white/55">
             Pattern:{' '}
-            <strong className="text-[#F5F5F7] font-medium">
+            <strong className="text-white font-medium">
               {puzzle.pattern.patternName}
             </strong>
           </span>
-          <span
-            className="font-semibold text-[#F5F5F7] tabular-nums"
-            data-testid="swap-counter"
-          >
-            Swaps: {swapCount}
-          </span>
+          <div className="flex items-center gap-2.5 tabular-nums">
+            <span
+              className={`font-semibold ${
+                allPlaced ? 'text-[#55EFC4]' : 'text-white/80'
+              }`}
+              data-testid="placed-counter"
+            >
+              Placed: {placedCount}/{totalCount}
+            </span>
+            <span className="text-white/20" aria-hidden="true">
+              ·
+            </span>
+            <span
+              className="font-semibold text-white/90 tabular-nums"
+              data-testid="swap-counter"
+            >
+              Swaps: {swapCount}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Central interactive shuffled board (supports both Drag-and-Drop and Press-and-Swap) */}
-      <div className="my-auto flex flex-col items-center justify-center gap-2.5">
+      {/* Central interactive empty-socket board */}
+      <div className="my-auto flex flex-col items-center justify-center gap-2">
         <GameBoard
           tileOrder={currentTileOrder}
           tiles={puzzle.tiles}
@@ -73,32 +118,53 @@ export function RecreateScreen({
           pattern={puzzle.pattern}
           interactive={true}
           selectedTileId={selectedTileId}
+          selectedSlotIndex={selectedSlotIndex}
+          externalHoveredSlotIndex={sliderHoveredSlotIndex}
           showSymbols={showSymbols}
           shouldReduceMotion={shouldReduceMotion}
           ariaLabel={`Round ${config.roundId} recreation board`}
           onTileActivate={onTileActivate}
+          onSlotActivate={onSlotActivate}
           onDirectSwap={onDirectSwap}
+          onPlaceTileInSlot={onPlaceTileInSlot}
+          onRemoveTileFromSlot={onRemoveTileFromBoard}
         />
 
         <p
-          className="text-xs font-medium text-[#9297A3] text-center"
+          className="text-[11px] font-medium text-white/55 text-center px-2"
           data-testid="phase-instruction"
         >
-          {selectedTileId
-            ? 'Tap destination tile to swap, or tap selected tile to cancel.'
-            : 'Drag & drop or tap two tiles to swap.'}
+          {instructionText}
         </p>
       </div>
 
-      {/* Explicit Lock In Solution action */}
-      <div className="pt-1">
+      {/* Bottom Colour Slider Bar & Lock In Solution CTA */}
+      <div className="space-y-2.5 pt-0.5">
+        <ColorSliderBar
+          shuffledOrder={puzzle.shuffledOrder}
+          currentBoardOrder={currentTileOrder}
+          tiles={puzzle.tiles}
+          selectedTileId={selectedTileId}
+          showSymbols={showSymbols}
+          shouldReduceMotion={shouldReduceMotion}
+          onSelectTile={onSelectSliderTile}
+          onPlaceTileInSlot={onPlaceTileInSlot}
+          onRemoveTileFromBoard={onRemoveTileFromBoard}
+          onClearBoard={onClearBoard}
+          onHoverBoardSlotChange={setSliderHoveredSlotIndex}
+        />
+
         <PrimaryButton
           onClick={onLockInSolution}
           data-testid="lock-in-button"
-          className="shadow-[0_8px_24px_rgba(145,173,255,0.2)]"
+          className={allPlaced ? 'dialed-spectrum-ring' : ''}
         >
           <Lock className="w-4 h-4" aria-hidden="true" />
-          <span>Lock In Solution</span>
+          <span>
+            {allPlaced
+              ? 'Lock In Solution'
+              : `Lock In Solution (${placedCount}/${totalCount} placed)`}
+          </span>
         </PrimaryButton>
       </div>
     </section>

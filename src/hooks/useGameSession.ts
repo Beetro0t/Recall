@@ -12,6 +12,9 @@ import {
   expireRecreationPhase,
   getRoundPuzzle,
   lockInRoundSolution,
+  performClearBoardToSlider,
+  performTilePlacement,
+  performTileRemoveFromBoard,
   performTileSwap,
   reconcileSessionWithClock,
   startConcealingPhase,
@@ -51,6 +54,7 @@ export interface UseGameSessionReturn {
   currentRoundPuzzle: RoundPuzzle;
   latestRoundResult: RoundResult | null;
   selectedTileId: string | null;
+  selectedSlotIndex: number | null;
   isTutorialOpen: boolean;
   isHomeOverlayOpen: boolean;
   isReviewOpen: boolean;
@@ -67,6 +71,11 @@ export interface UseGameSessionReturn {
   handleRecreationExpire: () => void;
   handleTileActivate: (tileId: string) => void;
   handleDirectTileSwap: (tileIdA: string, tileIdB: string) => void;
+  handleSelectSliderTile: (tileId: string) => void;
+  handleBoardSlotActivate: (slotIndex: number, tileId: string | null) => void;
+  handlePlaceTileInSlot: (tileId: string, slotIndex: number) => void;
+  handleRemoveTileFromBoard: (slotIndex: number) => void;
+  handleClearBoard: () => void;
   handleLockInSolution: () => void;
   handleContinueFromRoundEnd: () => void;
   handleBeginNextRound: () => void;
@@ -95,6 +104,7 @@ export function useGameSession({
 
   const [stats, setStats] = useState<PlayerStats>(() => loadPlayerStats());
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [isHomeOverlayOpen, setIsHomeOverlayOpen] = useState<boolean>(false);
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
@@ -126,6 +136,7 @@ export function useGameSession({
         const next = reconcileSessionWithClock(prev, challenge, Date.now());
         if (next.phase !== prev.phase) {
           setSelectedTileId(null);
+          setSelectedSlotIndex(null);
         }
         return next;
       });
@@ -169,6 +180,7 @@ export function useGameSession({
 
   const navigateHome = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     setIsTutorialOpen(false);
     setIsReviewOpen(false);
     if (session.phase !== 'home' && session.phase !== 'ready') {
@@ -188,6 +200,7 @@ export function useGameSession({
 
   const startOrContinueChallenge = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     setIsHomeOverlayOpen(false);
     setIsReviewOpen(false);
 
@@ -236,6 +249,7 @@ export function useGameSession({
     setIsTutorialOpen(false);
     setIsHomeOverlayOpen(false);
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase === 'home' || prev.phase === 'ready') {
         const next = startRoundMemorisation(prev, challenge, Date.now());
@@ -250,6 +264,7 @@ export function useGameSession({
 
   const handleMemorisationExpire = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase !== 'memorising') return prev;
       return startConcealingPhase(prev, Date.now());
@@ -258,13 +273,14 @@ export function useGameSession({
 
   const handleConcealComplete = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase !== 'concealing' && prev.phase !== 'memorising') {
         return prev;
       }
       const next = startRecreatingPhase(prev, challenge, Date.now());
       setAnnouncement(
-        `Tiles shuffled. Recreate the arrangement and lock in your solution. ${getRoundConfig(next.currentRoundId).solveMs / 1000} seconds remaining.`,
+        `Colours moved to the slider bar. Place all colours into the empty squares and lock in your solution.`,
       );
       return next;
     });
@@ -272,6 +288,7 @@ export function useGameSession({
 
   const handleRecreationExpire = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase !== 'recreating') return prev;
       playFeedback('failure', soundEnabled);
@@ -279,6 +296,201 @@ export function useGameSession({
       return expireRecreationPhase(prev, challenge);
     });
   }, [challenge, persistAndUpdateSession, soundEnabled]);
+
+  const handlePlaceTileInSlot = useCallback(
+    (tileId: string, slotIndex: number) => {
+      if (session.phase !== 'recreating' || !tileId) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        session.phaseDeadlineEpochMs !== null &&
+        now >= session.phaseDeadlineEpochMs
+      ) {
+        handleRecreationExpire();
+        return;
+      }
+
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+
+      persistAndUpdateSession((prev) => {
+        const next = performTilePlacement(prev, challenge, tileId, slotIndex, now);
+        if (next.phase === 'round-failure') {
+          playFeedback('failure', soundEnabled);
+          setAnnouncement(`Time is up for Round ${prev.currentRoundId}.`);
+        } else if (next.swapCount > prev.swapCount) {
+          playFeedback('swap', soundEnabled);
+          const tile = currentRoundPuzzle.tiles[tileId];
+          if (tile) {
+            setAnnouncement(`Placed ${tile.colorName} in square ${slotIndex + 1}.`);
+          }
+        }
+        return next;
+      });
+    },
+    [
+      challenge,
+      currentRoundPuzzle.tiles,
+      handleRecreationExpire,
+      persistAndUpdateSession,
+      session.phase,
+      session.phaseDeadlineEpochMs,
+      soundEnabled,
+    ],
+  );
+
+  const handleRemoveTileFromBoard = useCallback(
+    (slotIndex: number) => {
+      if (session.phase !== 'recreating') {
+        return;
+      }
+
+      const now = Date.now();
+      setSelectedTileId(null);
+      setSelectedSlotIndex(null);
+
+      persistAndUpdateSession((prev) => {
+        const removedTileId = prev.currentTileOrder[slotIndex];
+        const next = performTileRemoveFromBoard(prev, challenge, slotIndex, now);
+        if (next !== prev) {
+          playFeedback('select', soundEnabled);
+          const tile = removedTileId ? currentRoundPuzzle.tiles[removedTileId] : null;
+          if (tile) {
+            setAnnouncement(`Returned ${tile.colorName} to the colour slider bar.`);
+          }
+        }
+        return next;
+      });
+    },
+    [
+      challenge,
+      currentRoundPuzzle.tiles,
+      persistAndUpdateSession,
+      session.phase,
+      soundEnabled,
+    ],
+  );
+
+  const handleClearBoard = useCallback(() => {
+    if (session.phase !== 'recreating') return;
+    setSelectedTileId(null);
+    setSelectedSlotIndex(null);
+    playFeedback('select', soundEnabled);
+    persistAndUpdateSession((prev) =>
+      performClearBoardToSlider(prev, challenge, Date.now()),
+    );
+    setAnnouncement('Returned all colours to the slider bar.');
+  }, [challenge, persistAndUpdateSession, session.phase, soundEnabled]);
+
+  const handleSelectSliderTile = useCallback(
+    (tileId: string) => {
+      if (session.phase !== 'recreating' || !tileId) return;
+
+      const now = Date.now();
+      if (
+        session.phaseDeadlineEpochMs !== null &&
+        now >= session.phaseDeadlineEpochMs
+      ) {
+        handleRecreationExpire();
+        return;
+      }
+
+      // If an empty board square was already targeted first, place this slider colour straight into it!
+      if (selectedSlotIndex !== null) {
+        handlePlaceTileInSlot(tileId, selectedSlotIndex);
+        return;
+      }
+
+      if (selectedTileId === tileId) {
+        setSelectedTileId(null);
+        playFeedback('select', soundEnabled);
+        return;
+      }
+
+      setSelectedTileId(tileId);
+      playFeedback('select', soundEnabled);
+      const tile = currentRoundPuzzle.tiles[tileId];
+      if (tile) {
+        setAnnouncement(
+          `Selected ${tile.colorName} from slider bar. Tap a board square to place it.`,
+        );
+      }
+    },
+    [
+      currentRoundPuzzle.tiles,
+      handlePlaceTileInSlot,
+      handleRecreationExpire,
+      selectedSlotIndex,
+      selectedTileId,
+      session.phase,
+      session.phaseDeadlineEpochMs,
+      soundEnabled,
+    ],
+  );
+
+  const handleBoardSlotActivate = useCallback(
+    (slotIndex: number, occupantTileId: string | null) => {
+      if (session.phase !== 'recreating') return;
+
+      const now = Date.now();
+      if (
+        session.phaseDeadlineEpochMs !== null &&
+        now >= session.phaseDeadlineEpochMs
+      ) {
+        handleRecreationExpire();
+        return;
+      }
+
+      // If a tile (from the slider bar or another board square) is currently selected:
+      if (selectedTileId !== null) {
+        // Clicking the same placed board tile again deselects it
+        if (occupantTileId === selectedTileId) {
+          setSelectedTileId(null);
+          playFeedback('select', soundEnabled);
+          return;
+        }
+        // Place/swap the selected tile into this board square!
+        handlePlaceTileInSlot(selectedTileId, slotIndex);
+        return;
+      }
+
+      // No tile is currently selected:
+      if (occupantTileId) {
+        // Select the placed tile on the board so the player can move or swap it
+        setSelectedSlotIndex(null);
+        setSelectedTileId(occupantTileId);
+        playFeedback('select', soundEnabled);
+        const tile = currentRoundPuzzle.tiles[occupantTileId];
+        if (tile) {
+          setAnnouncement(`Selected ${tile.colorName} at square ${slotIndex + 1}.`);
+        }
+      } else {
+        // Empty square tapped when no tile is selected: highlight this square as target!
+        if (selectedSlotIndex === slotIndex) {
+          setSelectedSlotIndex(null);
+          playFeedback('select', soundEnabled);
+        } else {
+          setSelectedSlotIndex(slotIndex);
+          playFeedback('select', soundEnabled);
+          setAnnouncement(
+            `Targeted empty square ${slotIndex + 1}. Tap a colour on the slider bar to place it here.`,
+          );
+        }
+      }
+    },
+    [
+      currentRoundPuzzle.tiles,
+      handlePlaceTileInSlot,
+      handleRecreationExpire,
+      selectedSlotIndex,
+      selectedTileId,
+      session.phase,
+      session.phaseDeadlineEpochMs,
+      soundEnabled,
+    ],
+  );
 
   const handleDirectTileSwap = useCallback(
     (tileIdA: string, tileIdB: string) => {
@@ -301,6 +513,7 @@ export function useGameSession({
       }
 
       setSelectedTileId(null);
+      setSelectedSlotIndex(null);
 
       persistAndUpdateSession((prev) => {
         const next = performTileSwap(prev, challenge, tileIdA, tileIdB, now);
@@ -309,20 +522,12 @@ export function useGameSession({
           setAnnouncement(`Time is up for Round ${prev.currentRoundId}.`);
         } else if (next.swapCount > prev.swapCount) {
           playFeedback('swap', soundEnabled);
-          const tileA = currentRoundPuzzle.tiles[tileIdA];
-          const tileB = currentRoundPuzzle.tiles[tileIdB];
-          if (tileA && tileB) {
-            setAnnouncement(
-              `Swapped ${tileA.colorName} with ${tileB.colorName}. ${next.swapCount} swaps used.`,
-            );
-          }
         }
         return next;
       });
     },
     [
       challenge,
-      currentRoundPuzzle.tiles,
       handleRecreationExpire,
       persistAndUpdateSession,
       session.phase,
@@ -333,52 +538,14 @@ export function useGameSession({
 
   const handleTileActivate = useCallback(
     (tileId: string) => {
-      if (session.phase !== 'recreating') {
-        return;
+      const slotIdx = session.currentTileOrder.indexOf(tileId);
+      if (slotIdx !== -1) {
+        handleBoardSlotActivate(slotIdx, tileId);
+      } else {
+        handleSelectSliderTile(tileId);
       }
-
-      const now = Date.now();
-      if (
-        session.phaseDeadlineEpochMs !== null &&
-        now >= session.phaseDeadlineEpochMs
-      ) {
-        handleRecreationExpire();
-        return;
-      }
-
-      if (selectedTileId === null) {
-        setSelectedTileId(tileId);
-        playFeedback('select', soundEnabled);
-        const tile = currentRoundPuzzle.tiles[tileId];
-        const pos = session.currentTileOrder.indexOf(tileId) + 1;
-        if (tile) {
-          setAnnouncement(`Selected ${tile.colorName} tile at position ${pos}.`);
-        }
-        return;
-      }
-
-      if (selectedTileId === tileId) {
-        setSelectedTileId(null);
-        playFeedback('select', soundEnabled);
-        const tile = currentRoundPuzzle.tiles[tileId];
-        if (tile) {
-          setAnnouncement(`Deselected ${tile.colorName} tile.`);
-        }
-        return;
-      }
-
-      handleDirectTileSwap(selectedTileId, tileId);
     },
-    [
-      currentRoundPuzzle.tiles,
-      handleDirectTileSwap,
-      handleRecreationExpire,
-      selectedTileId,
-      session.currentTileOrder,
-      session.phase,
-      session.phaseDeadlineEpochMs,
-      soundEnabled,
-    ],
+    [handleBoardSlotActivate, handleSelectSliderTile, session.currentTileOrder],
   );
 
   const handleLockInSolution = useCallback(() => {
@@ -388,6 +555,7 @@ export function useGameSession({
 
     const now = Date.now();
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
 
     persistAndUpdateSession((prev) => {
       const next = lockInRoundSolution(prev, challenge, now);
@@ -415,6 +583,7 @@ export function useGameSession({
 
   const handleContinueFromRoundEnd = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       const next = advanceAfterRoundResult(prev, challenge, Date.now());
       if (next.phase === 'results') {
@@ -436,6 +605,7 @@ export function useGameSession({
 
   const handleBeginNextRound = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase !== 'intermission') return prev;
       const next = startRoundMemorisation(prev, challenge, Date.now());
@@ -452,6 +622,7 @@ export function useGameSession({
 
   const devResetAndReplay = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     setIsReviewOpen(false);
     setIsTutorialOpen(false);
     setIsHomeOverlayOpen(false);
@@ -466,6 +637,7 @@ export function useGameSession({
 
   const devNextDailyPuzzle = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     setIsReviewOpen(false);
     setIsTutorialOpen(false);
     setIsHomeOverlayOpen(false);
@@ -488,6 +660,7 @@ export function useGameSession({
     (roundId: number) => {
       if (!ROUND_CONFIGS.some((r) => r.roundId === roundId)) return;
       setSelectedTileId(null);
+      setSelectedSlotIndex(null);
       setIsReviewOpen(false);
       setIsTutorialOpen(false);
       setIsHomeOverlayOpen(false);
@@ -511,6 +684,7 @@ export function useGameSession({
 
   const devSkipMemoriseTimer = useCallback(() => {
     setSelectedTileId(null);
+    setSelectedSlotIndex(null);
     persistAndUpdateSession((prev) => {
       if (prev.phase === 'memorising' || prev.phase === 'concealing') {
         return startRecreatingPhase(prev, challenge, Date.now());
@@ -528,6 +702,7 @@ export function useGameSession({
     currentRoundPuzzle,
     latestRoundResult,
     selectedTileId,
+    selectedSlotIndex,
     isTutorialOpen,
     isHomeOverlayOpen,
     isReviewOpen,
@@ -544,6 +719,11 @@ export function useGameSession({
     handleRecreationExpire,
     handleTileActivate,
     handleDirectTileSwap,
+    handleSelectSliderTile,
+    handleBoardSlotActivate,
+    handlePlaceTileInSlot,
+    handleRemoveTileFromBoard,
+    handleClearBoard,
     handleLockInSolution,
     handleContinueFromRoundEnd,
     handleBeginNextRound,

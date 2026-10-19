@@ -52,33 +52,35 @@ export function HomeScreen({
     >
       {/* Top badge and hero section */}
       <div className="space-y-4 text-center pt-1">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#16181E] border border-[#2D313B] text-xs font-medium text-[#9297A3] tabular-nums shadow-xs">
-          <Sparkles className="w-3.5 h-3.5 text-[#91ADFF]" aria-hidden="true" />
-          <span className="text-[#F5F5F7] font-semibold">
+        <div className="dialed-spectrum-ring inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#090A0E] text-xs font-medium text-white/65 tabular-nums shadow-xs">
+          <Sparkles className="w-3.5 h-3.5 text-[#55EFC4]" aria-hidden="true" />
+          <span className="text-white font-semibold tracking-[-0.01em]">
             Daily {formatChallengeNumber(challengeNumber)}
           </span>
-          <span aria-hidden="true">·</span>
+          <span aria-hidden="true" className="text-white/25">
+            ·
+          </span>
           <span>{challengeId}</span>
         </div>
 
         <div className="space-y-1.5">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#F5F5F7]">
+          <h1 className="text-3xl sm:text-[38px] font-semibold tracking-[-0.04em] leading-[1.08] text-white">
             How sharp is your memory?
           </h1>
-          <p className="text-sm sm:text-base font-medium text-[#9297A3]">
-            Memorise. Shuffle. Recreate. Lock it in.
+          <p className="text-sm sm:text-base font-medium text-white/55 tracking-[-0.01em]">
+            Memorise the colours. Rebuild the empty board from the slider.
           </p>
         </div>
 
         {/* Sleek unnumbered 2x2 architectural tile showcase */}
         <div
           aria-hidden="true"
-          className="relative mx-auto w-32 h-32 grid grid-cols-2 gap-2.5 p-3 rounded-[22px] bg-[#16181E] border border-[#2D313B] shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
+          className="relative mx-auto w-32 h-32 grid grid-cols-2 gap-2.5 p-3 rounded-[24px] bg-[#0B0C10] border border-white/[0.09] shadow-[0_20px_48px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)]"
         >
           {previewTiles.map((t) => (
             <div
               key={t.colorId}
-              className="relative rounded-[12px] border border-white/15 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.28)] transition-transform duration-300 hover:scale-105"
+              className="relative rounded-[13px] border border-white/20 flex items-center justify-center shadow-[0_6px_14px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.32)] transition-transform duration-300 hover:scale-105"
               style={{ backgroundColor: t.hex }}
             >
               {showSymbols && <TileSymbol symbolId={t.symbolId} className="w-5 h-5" />}
@@ -90,14 +92,14 @@ export function HomeScreen({
       {/* Three-round structure summary */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-[#9297A3]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/50">
             {isDailyCompleted
               ? `Today's Result · ${dailyMatched.matched}/${dailyMatched.total} Matched`
               : "Today's 3 Rounds"}
           </span>
           {(effectiveStreak > 0 || bestStreak > 0) && (
             <span
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#91ADFF] tabular-nums"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#55EFC4] tabular-nums"
               data-testid="home-streak-badge"
             >
               <Flame className="w-3.5 h-3.5" aria-hidden="true" />
@@ -118,31 +120,31 @@ export function HomeScreen({
               <div
                 key={round.roundId}
                 data-testid={`home-round-card-${round.roundId}`}
-                className={`p-3 rounded-[16px] bg-[#16181E] border transition-colors ${
+                className={`p-3 rounded-[18px] bg-white/[0.03] border transition-colors ${
                   isSolved
-                    ? 'border-[#73C8AC]/45 bg-[#73C8AC]/[0.04]'
+                    ? 'border-[#55EFC4]/45 bg-[#55EFC4]/[0.05]'
                     : isAttempted
-                      ? 'border-[#F18D83]/35'
-                      : 'border-[#2D313B]'
+                      ? 'border-[#FF6B6B]/40 bg-[#FF6B6B]/[0.03]'
+                      : 'border-white/[0.08]'
                 } text-left`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#9297A3]">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
                     Round {round.roundId}
                   </span>
                   {isSolved && (
                     <CheckCircle2
-                      className="w-3.5 h-3.5 text-[#73C8AC]"
+                      className="w-3.5 h-3.5 text-[#55EFC4]"
                       aria-hidden="true"
                     />
                   )}
                 </div>
-                <div className="text-base font-semibold text-[#F5F5F7] mt-1 tabular-nums">
+                <div className="text-base font-semibold tracking-[-0.02em] text-white mt-1 tabular-nums">
                   {roundResult
                     ? `${matchedCount}/${totalCount} right`
                     : `${round.tileCount} tiles`}
                 </div>
-                <div className="text-[11px] text-[#9297A3] mt-0.5 tabular-nums">
+                <div className="text-[11px] text-white/50 mt-0.5 tabular-nums">
                   {roundResult
                     ? `${roundResult.swaps} ${roundResult.swaps === 1 ? 'swap' : 'swaps'}`
                     : `${round.memoriseMs / 1000}s · ${round.solveMs / 1000}s`}
@@ -171,7 +173,7 @@ export function HomeScreen({
               onClick={onOpenReview}
               data-testid="home-review-button"
             >
-              <Eye className="w-4 h-4 text-[#91ADFF]" aria-hidden="true" />
+              <Eye className="w-4 h-4 text-[#55EFC4]" aria-hidden="true" />
               <span>Review Boards</span>
             </PrimaryButton>
           </div>
@@ -179,6 +181,7 @@ export function HomeScreen({
           <PrimaryButton
             onClick={onStartOrContinue}
             data-testid="start-challenge-button"
+            className="dialed-spectrum-ring"
           >
             <span>
               {hasInProgressSession

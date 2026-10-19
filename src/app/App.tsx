@@ -39,6 +39,7 @@ export function App({ overrideChallengeId }: AppProps = {}) {
     currentRoundPuzzle,
     latestRoundResult,
     selectedTileId,
+    selectedSlotIndex,
     isTutorialOpen,
     isHomeOverlayOpen,
     isReviewOpen,
@@ -54,6 +55,11 @@ export function App({ overrideChallengeId }: AppProps = {}) {
     handleConcealComplete,
     handleRecreationExpire,
     handleTileActivate,
+    handleSelectSliderTile,
+    handleBoardSlotActivate,
+    handlePlaceTileInSlot,
+    handleRemoveTileFromBoard,
+    handleClearBoard,
     handleDirectTileSwap,
     handleLockInSolution,
     handleContinueFromRoundEnd,
@@ -102,18 +108,18 @@ export function App({ overrideChallengeId }: AppProps = {}) {
 
   const ambientGlowColor =
     session.phase === 'round-success'
-      ? 'rgba(115, 200, 172, 0.08)'
+      ? 'rgba(85, 239, 196, 0.11)'
       : session.phase === 'round-failure'
-        ? 'rgba(241, 141, 131, 0.08)'
+        ? 'rgba(255, 107, 107, 0.11)'
         : session.phase === 'recreating'
-          ? 'rgba(145, 173, 255, 0.09)'
-          : 'rgba(90, 130, 230, 0.06)';
+          ? 'rgba(108, 92, 231, 0.11)'
+          : 'rgba(0, 206, 201, 0.08)';
 
   return (
     <div
-      className="relative min-h-dvh w-full bg-[#101114] text-[#F5F5F7] flex flex-col items-center justify-between px-4 sm:px-6 py-3 overflow-x-hidden"
+      className="relative min-h-dvh w-full bg-[#050507] text-white flex flex-col items-center justify-center sm:py-5 px-3 sm:px-6 overflow-x-hidden"
       style={{
-        backgroundImage: `radial-gradient(circle at 50% 28%, ${ambientGlowColor}, transparent 68%)`,
+        backgroundImage: `radial-gradient(circle at 50% 24%, ${ambientGlowColor}, transparent 68%)`,
       }}
     >
       {/* Screen-reader live region for controlled announcements (Section 12) */}
@@ -127,7 +133,8 @@ export function App({ overrideChallengeId }: AppProps = {}) {
         {announcement}
       </div>
 
-      <div className="relative z-10 w-full max-w-[460px] flex-1 flex flex-col justify-between">
+      {/* Dialed.gg-style pitch-black studio game container */}
+      <div className="relative z-10 w-full max-w-[472px] min-h-[calc(100dvh-16px)] sm:min-h-[690px] flex-1 sm:flex-initial flex flex-col justify-between bg-[#07080B]/95 sm:rounded-[28px] sm:border sm:border-white/[0.09] sm:shadow-[0_4px_16px_rgba(0,0,0,0.6),0_34px_56px_rgba(0,0,0,0.48)] px-3 sm:px-5 py-2.5">
         <RoundHeader
           roundId={isRoundHeaderActive ? session.currentRoundId : undefined}
           tileCount={isRoundHeaderActive ? currentRoundConfig.tileCount : undefined}
@@ -197,10 +204,16 @@ export function App({ overrideChallengeId }: AppProps = {}) {
               currentTileOrder={session.currentTileOrder}
               swapCount={session.swapCount}
               selectedTileId={selectedTileId}
+              selectedSlotIndex={selectedSlotIndex}
               deadlineEpochMs={session.phaseDeadlineEpochMs}
               showSymbols={preferences.symbolsEnabled}
               shouldReduceMotion={shouldReduceMotion}
               onTileActivate={handleTileActivate}
+              onSlotActivate={handleBoardSlotActivate}
+              onSelectSliderTile={handleSelectSliderTile}
+              onPlaceTileInSlot={handlePlaceTileInSlot}
+              onRemoveTileFromBoard={handleRemoveTileFromBoard}
+              onClearBoard={handleClearBoard}
               onDirectSwap={handleDirectTileSwap}
               onLockInSolution={handleLockInSolution}
               onRecreateExpire={handleRecreationExpire}

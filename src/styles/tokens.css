@@ -1,14 +1,14 @@
 :root {
-  /* Core Surface & Text Tokens */
-  --color-bg: #101114;
-  --color-surface: #1b1d22;
-  --color-surface-elevated: #24262d;
-  --color-border: #30333b;
-  --color-text-primary: #f5f5f7;
-  --color-text-secondary: #9297a3;
-  --color-accent: #91adff;
-  --color-success: #73c8ac;
-  --color-urgency: #f18d83;
+  /* Core Surface & Text Tokens — Dialed.gg Inspired OLED Studio Frame */
+  --color-bg: #050507;
+  --color-surface: #0b0c10;
+  --color-surface-elevated: #12141b;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: rgba(255, 255, 255, 0.56);
+  --color-accent: #ffffff;
+  --color-success: #55efc4;
+  --color-urgency: #ff6b6b;
 
   /* Curated Matte Tile Palette */
   --tile-blue: #5a82e6;
@@ -21,10 +21,10 @@
   --tile-rose: #ce6a96;
 
   /* Spacing & Geometry */
-  --radius-tile: 14px;
-  --radius-card: 18px;
-  --radius-button: 12px;
-  --max-content-width: 460px;
+  --radius-tile: 16px;
+  --radius-card: 22px;
+  --radius-button: 9999px;
+  --max-content-width: 472px;
 
   /* Typography */
   --font-sans:

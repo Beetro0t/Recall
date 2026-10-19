@@ -1,16 +1,17 @@
 import { memo } from 'react';
 import type { DragEvent, PointerEvent } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { BoardCellCoord, Tile as TileModel } from '../game/types';
 import { TileSymbol } from './TileSymbol';
 
 export interface TileProps {
-  tile: TileModel;
+  tile: TileModel | null;
   positionIndex: number;
   cellCoord?: BoardCellCoord;
   interactive: boolean;
   isSelected: boolean;
+  isTargetSlotHighlighted?: boolean;
   isDragging?: boolean;
   isDropTarget?: boolean;
   dragOffset?: { x: number; y: number } | null;
@@ -21,11 +22,15 @@ export interface TileProps {
   showSymbol: boolean;
   shouldReduceMotion: boolean;
   sizeVariant?: 'normal' | 'compact' | 'mini';
-  onActivate?: (tileId: string) => void;
-  onTilePointerDown?: (tileId: string, e: PointerEvent<HTMLButtonElement>) => void;
-  onNativeDragStart?: (tileId: string) => void;
-  onNativeDragOver?: (tileId: string, e: DragEvent<HTMLButtonElement>) => void;
-  onNativeDrop?: (tileId: string, e: DragEvent<HTMLButtonElement>) => void;
+  onSlotActivate?: (slotIndex: number, tileId: string | null) => void;
+  onTilePointerDown?: (
+    slotIndex: number,
+    tileId: string,
+    e: PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onNativeDragStart?: (tileId: string, slotIndex: number) => void;
+  onNativeDragOver?: (slotIndex: number, e: DragEvent<HTMLButtonElement>) => void;
+  onNativeDrop?: (slotIndex: number, e: DragEvent<HTMLButtonElement>) => void;
 }
 
 export const Tile = memo(function Tile({
@@ -34,6 +39,7 @@ export const Tile = memo(function Tile({
   cellCoord,
   interactive,
   isSelected,
+  isTargetSlotHighlighted = false,
   isDragging = false,
   isDropTarget = false,
   dragOffset = null,
@@ -44,42 +50,47 @@ export const Tile = memo(function Tile({
   showSymbol,
   shouldReduceMotion,
   sizeVariant = 'normal',
-  onActivate,
+  onSlotActivate,
   onTilePointerDown,
   onNativeDragStart,
   onNativeDragOver,
   onNativeDrop,
 }: TileProps) {
   const positionNumber = positionIndex + 1;
+  const isEmpty = !tile;
 
   const label = isConcealed
-    ? `Position ${positionNumber}: Concealed tile`
-    : `Position ${positionNumber}: ${tile.colorName} tile${
-        showSymbol ? ` (${tile.symbolId})` : ''
-      }${isSelected ? ', selected' : ''}${
-        matchStatus === 'correct'
-          ? ', matched'
-          : matchStatus === 'mismatch'
-            ? ', misplaced'
-            : ''
-      }`;
+    ? `Square ${positionNumber}: Concealed`
+    : isEmpty
+      ? `Square ${positionNumber}: Empty square${
+          isSelected ? ', targeted for placement' : ''
+        }${matchStatus === 'mismatch' ? ', unplaced' : ''}`
+      : `Square ${positionNumber}: ${tile.colorName} tile${
+          showSymbol ? ` (${tile.symbolId})` : ''
+        }${isSelected ? ', selected' : ''}${
+          matchStatus === 'correct'
+            ? ', matched'
+            : matchStatus === 'mismatch'
+              ? ', misplaced'
+              : ''
+        }`;
 
   const handleClick = () => {
     if (!interactive || isConcealed) return;
-    onActivate?.(tile.id);
+    onSlotActivate?.(positionIndex, tile?.id ?? null);
   };
 
   const radiusClass =
     sizeVariant === 'mini'
-      ? 'rounded-[9px]'
+      ? 'rounded-[10px]'
       : sizeVariant === 'compact'
-        ? 'rounded-[12px]'
-        : 'rounded-[16px]';
+        ? 'rounded-[14px]'
+        : 'rounded-[18px]';
 
   return (
     <motion.button
       type="button"
-      layout={!shouldReduceMotion && !isDragging}
+      layout={!shouldReduceMotion && !isDragging && !isEmpty}
       initial={isCelebration && !shouldReduceMotion ? { scale: 0.85, y: 8 } : false}
       animate={
         isCelebration && !shouldReduceMotion
@@ -100,78 +111,92 @@ export const Tile = memo(function Tile({
               }
             : {
                 layout: {
-                  duration: 0.18,
+                  duration: 0.2,
                   ease: [0.22, 1, 0.36, 1],
                 },
               }
       }
       disabled={!interactive || isConcealed}
-      draggable={interactive && !isConcealed}
+      draggable={interactive && !isConcealed && !isEmpty}
       aria-label={label}
       aria-pressed={interactive ? isSelected : undefined}
       data-testid={`board-tile-${positionIndex}`}
-      data-tile-id={tile.id}
-      data-tile-color={tile.colorId}
+      data-slot-index={positionIndex}
+      data-tile-id={tile?.id ?? ''}
+      data-tile-color={tile?.colorId ?? ''}
       onClick={handleClick}
       onPointerDown={(e) => {
-        if (!interactive || isConcealed) return;
-        onTilePointerDown?.(tile.id, e);
+        if (!interactive || isConcealed || !tile) return;
+        onTilePointerDown?.(positionIndex, tile.id, e);
       }}
-      onDragStart={() => {
-        if (!interactive || isConcealed) return;
-        onNativeDragStart?.(tile.id);
+      onDragStart={(e) => {
+        if (!interactive || isConcealed || !tile) return;
+        const nativeDrag = e as unknown as DragEvent<HTMLButtonElement>;
+        nativeDrag.dataTransfer?.setData('text/plain', tile.id);
+        onNativeDragStart?.(tile.id, positionIndex);
       }}
       onDragOver={(e) => {
         if (!interactive || isConcealed) return;
-        onNativeDragOver?.(tile.id, e);
+        onNativeDragOver?.(positionIndex, e);
       }}
       onDrop={(e) => {
         if (!interactive || isConcealed) return;
-        onNativeDrop?.(tile.id, e);
+        onNativeDrop?.(positionIndex, e);
       }}
       className={`
         group relative z-10 aspect-square w-full ${radiusClass} no-select focus-ring
         flex items-center justify-center
         ${
           interactive && !isConcealed
-            ? 'cursor-grab active:cursor-grabbing hover:brightness-[1.06]'
+            ? isEmpty
+              ? 'cursor-pointer hover:border-white/40 hover:bg-white/[0.06]'
+              : 'cursor-grab active:cursor-grabbing hover:brightness-[1.06]'
             : 'cursor-default'
         }
         ${
           isDragging
-            ? 'z-30 shadow-[0_18px_38px_rgba(0,0,0,0.65)] ring-2 ring-white/90'
-            : 'transition-transform duration-120'
+            ? 'z-30 shadow-[0_20px_44px_rgba(0,0,0,0.75)] ring-2 ring-white'
+            : 'transition-all duration-150'
         }
         ${
-          !isDragging && isSelected
-            ? 'ring-[3px] ring-[#91ADFF] ring-offset-2 ring-offset-[#101114] scale-[0.95] z-20 shadow-[0_0_24px_rgba(145,173,255,0.35)]'
+          isEmpty
+            ? isDropTarget || isSelected
+              ? 'bg-white/[0.09] border-2 border-white shadow-[0_0_24px_rgba(255,255,255,0.2),inset_0_2px_10px_rgba(0,0,0,0.6)] scale-[1.03]'
+              : isTargetSlotHighlighted
+                ? 'bg-white/[0.04] border-[1.5px] border-dashed border-white/45 shadow-[inset_0_2px_10px_rgba(0,0,0,0.65)]'
+                : 'bg-[#0C0D12]/90 border-[1.5px] border-dashed border-white/18 shadow-[inset_0_2px_10px_rgba(0,0,0,0.65)]'
             : ''
         }
         ${
-          !isDragging && isDropTarget
-            ? 'ring-[3px] ring-white/90 ring-offset-2 ring-offset-[#101114] scale-[1.04] z-20'
+          !isEmpty && !isDragging && isSelected
+            ? 'ring-[3px] ring-white ring-offset-2 ring-offset-[#050507] scale-[0.95] z-20 shadow-[0_0_28px_rgba(255,255,255,0.35)]'
             : ''
         }
         ${
-          !isSelected && !isDropTarget && !isDragging
-            ? 'border border-white/15 shadow-[0_6px_16px_rgba(0,0,0,0.28)]'
+          !isEmpty && !isDragging && isDropTarget
+            ? 'ring-[3px] ring-white/95 ring-offset-2 ring-offset-[#050507] scale-[1.05] z-20'
             : ''
         }
         ${
-          isSuccessHighlight
-            ? 'ring-2 ring-[#73C8AC] ring-offset-1 ring-offset-[#101114]'
+          !isEmpty && !isSelected && !isDropTarget && !isDragging
+            ? 'border border-white/18 shadow-[0_8px_20px_rgba(0,0,0,0.45)]'
+            : ''
+        }
+        ${
+          isSuccessHighlight && !isEmpty
+            ? 'ring-2 ring-[#34D399] ring-offset-1 ring-offset-[#050507]'
             : ''
         }
         ${
           matchStatus === 'mismatch'
-            ? 'ring-2 ring-[#F18D83]/90 ring-offset-1 ring-offset-[#101114]'
+            ? 'ring-2 ring-[#FF6B6B]/90 ring-offset-1 ring-offset-[#050507]'
             : matchStatus === 'correct'
-              ? 'ring-2 ring-[#73C8AC]/85 ring-offset-1 ring-offset-[#101114]'
+              ? 'ring-2 ring-[#34D399]/90 ring-offset-1 ring-offset-[#050507]'
               : ''
         }
       `}
       style={{
-        backgroundColor: isConcealed ? '#20232B' : tile.hex,
+        backgroundColor: isConcealed ? '#14151A' : isEmpty ? undefined : tile.hex,
         gridColumnStart: cellCoord?.col,
         gridRowStart: cellCoord?.row,
         transform:
@@ -181,16 +206,32 @@ export const Tile = memo(function Tile({
         touchAction: interactive ? 'none' : 'manipulation',
       }}
     >
-      {/* Tactile ceramic top-lighting and inner bezel */}
-      {!isConcealed && (
+      {/* Empty square precision socket indicator */}
+      {isEmpty && !isConcealed && (
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 ${radiusClass} bg-gradient-to-b from-white/18 via-transparent to-black/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.32)]`}
+          className={`pointer-events-none flex items-center justify-center rounded-full transition-all duration-150 ${
+            isDropTarget || isSelected || isTargetSlotHighlighted
+              ? 'w-6 h-6 bg-white/15 text-white scale-105'
+              : 'w-2 h-2 bg-white/15 group-hover:bg-white/30'
+          }`}
+        >
+          {(isDropTarget || isSelected || isTargetSlotHighlighted) && (
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+          )}
+        </span>
+      )}
+
+      {/* Tactile ceramic top-lighting and inner bezel for placed tiles */}
+      {!isEmpty && !isConcealed && (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 ${radiusClass} bg-gradient-to-b from-white/22 via-transparent to-black/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)]`}
         />
       )}
 
       {/* Optional colour-independent geometric symbol */}
-      {!isConcealed && showSymbol && (
+      {!isEmpty && !isConcealed && showSymbol && (
         <TileSymbol
           symbolId={tile.symbolId}
           className={
@@ -204,10 +245,10 @@ export const Tile = memo(function Tile({
       )}
 
       {/* Selected indicator dot */}
-      {isSelected && !isConcealed && (
+      {!isEmpty && isSelected && !isConcealed && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-[#F5F5F7] border border-[#101114] shadow-sm"
+          className="pointer-events-none absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-white border border-black shadow-sm"
         />
       )}
 
@@ -219,8 +260,8 @@ export const Tile = memo(function Tile({
             sizeVariant === 'mini' ? 'w-3.5 h-3.5' : 'w-4 h-4'
           } rounded-full flex items-center justify-center shadow-sm ${
             matchStatus === 'correct'
-              ? 'bg-[#101114]/90 text-[#73C8AC]'
-              : 'bg-[#101114]/90 text-[#F18D83]'
+              ? 'bg-black/90 text-[#34D399]'
+              : 'bg-black/90 text-[#FF6B6B]'
           }`}
         >
           {matchStatus === 'correct' ? (

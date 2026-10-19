@@ -1,4 +1,11 @@
-import { countMatchedTiles, isBoardSolved, swapTilesById } from './board';
+import {
+  countMatchedTiles,
+  createEmptyBoardOrder,
+  isBoardSolved,
+  placeTileInBoardSlot,
+  removeTileFromBoardSlot,
+  swapTilesById,
+} from './board';
 import {
   CONCEAL_TRANSITION_MS,
   getRoundConfig,
@@ -117,8 +124,9 @@ export function startConcealingPhase(
 }
 
 /**
- * Transitions from `concealing` (or directly from expired `memorising`) into `recreating`,
- * presenting the predetermined shuffled board and starting the recreation timer.
+ * Transitions from `concealing` (or directly from expired `memorising`) into `recreating`.
+ * The board squares become empty ('') and the round's colours move down onto the slider bar
+ * (in `puzzle.shuffledOrder`), so the player places them from scratch.
  */
 export function startRecreatingPhase(
   session: GameSession,
@@ -138,7 +146,7 @@ export function startRecreatingPhase(
   return {
     ...session,
     phase: 'recreating',
-    currentTileOrder: [...puzzle.shuffledOrder],
+    currentTileOrder: createEmptyBoardOrder(puzzle.targetOrder.length),
     swapCount: 0,
     phaseStartEpochMs: effectiveStartMs,
     phaseDeadlineEpochMs: effectiveStartMs + config.solveMs,
@@ -205,7 +213,109 @@ export function expireRecreationPhase(
 }
 
 /**
- * Executes a tile swap during the `recreating` phase.
+ * Places a tile (from the bottom slider bar or from another board square) into `targetSlotIndex`
+ * on the board during the `recreating` phase.
+ */
+export function performTilePlacement(
+  session: GameSession,
+  challenge: DailyChallenge,
+  tileId: string,
+  targetSlotIndex: number,
+  eventEpochMs: number,
+): GameSession {
+  if (session.phase !== 'recreating') {
+    return session;
+  }
+
+  if (
+    session.phaseDeadlineEpochMs !== null &&
+    eventEpochMs >= session.phaseDeadlineEpochMs
+  ) {
+    return expireRecreationPhase(session, challenge);
+  }
+
+  const puzzle = getRoundPuzzle(challenge, session.currentRoundId);
+  const placement = placeTileInBoardSlot(
+    session.currentTileOrder,
+    tileId,
+    targetSlotIndex,
+    puzzle.targetOrder,
+  );
+
+  if (!placement.swapped) {
+    return session;
+  }
+
+  return {
+    ...session,
+    currentTileOrder: placement.nextOrder,
+    swapCount: session.swapCount + 1,
+  };
+}
+
+/**
+ * Removes a placed tile from `slotIndex` on the board back to the bottom slider bar.
+ */
+export function performTileRemoveFromBoard(
+  session: GameSession,
+  challenge: DailyChallenge,
+  slotIndex: number,
+  eventEpochMs: number,
+): GameSession {
+  if (session.phase !== 'recreating') {
+    return session;
+  }
+
+  if (
+    session.phaseDeadlineEpochMs !== null &&
+    eventEpochMs >= session.phaseDeadlineEpochMs
+  ) {
+    return expireRecreationPhase(session, challenge);
+  }
+
+  const removal = removeTileFromBoardSlot(session.currentTileOrder, slotIndex);
+  if (!removal.swapped) {
+    return session;
+  }
+
+  return {
+    ...session,
+    currentTileOrder: removal.nextOrder,
+  };
+}
+
+/**
+ * Returns all placed tiles on the board back to the bottom slider bar.
+ */
+export function performClearBoardToSlider(
+  session: GameSession,
+  challenge: DailyChallenge,
+  eventEpochMs: number,
+): GameSession {
+  if (session.phase !== 'recreating') {
+    return session;
+  }
+
+  if (
+    session.phaseDeadlineEpochMs !== null &&
+    eventEpochMs >= session.phaseDeadlineEpochMs
+  ) {
+    return expireRecreationPhase(session, challenge);
+  }
+
+  const hasAnyPlaced = session.currentTileOrder.some((id) => id !== '');
+  if (!hasAnyPlaced) {
+    return session;
+  }
+
+  return {
+    ...session,
+    currentTileOrder: createEmptyBoardOrder(session.currentTileOrder.length),
+  };
+}
+
+/**
+ * Executes a tile swap between two placed tiles on the board during the `recreating` phase.
  * Does NOT auto-complete the round; the player must explicitly lock in their solution.
  */
 export function performTileSwap(

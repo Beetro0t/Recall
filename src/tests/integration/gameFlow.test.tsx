@@ -4,40 +4,46 @@ import { App } from '../../app/App';
 import { generateDailyChallenge } from '../../game/puzzleGenerator';
 
 /**
- * Helper to arrange the currently rendered interactive board to match `targetOrder`
- * using either tap-to-swap or drag-and-drop, and then click Lock In Solution.
+ * Helper to place all tiles from the bottom ColorSliderBar into the empty
+ * board squares to match `targetOrder`, using either Drag-and-Drop or
+ * Tap-to-Place, and then click Lock In Solution.
  */
-function arrangeAndLockInDisplayedBoard(
+function placeFromSliderAndLockIn(
   targetOrder: readonly string[],
   useDragAndDrop = false,
 ) {
-  const workingOrder = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('[data-testid^="board-tile-"]'),
-  ).map((el) => el.getAttribute('data-tile-id')!);
+  expect(screen.getByTestId('recreate-screen')).toBeInTheDocument();
+  expect(screen.getByTestId('color-slider-bar')).toBeInTheDocument();
 
+  // Verify the board starts with empty squares
   for (let i = 0; i < targetOrder.length; i++) {
-    const desiredId = targetOrder[i];
-    const currentIdx = workingOrder.indexOf(desiredId);
-    if (currentIdx !== i) {
-      const tileAtI = screen.getByTestId(`board-tile-${i}`);
-      const tileAtCurrent = screen.getByTestId(`board-tile-${currentIdx}`);
-
-      if (useDragAndDrop) {
-        fireEvent.dragStart(tileAtI);
-        fireEvent.dragOver(tileAtCurrent);
-        fireEvent.drop(tileAtCurrent);
-      } else {
-        fireEvent.click(tileAtI);
-        fireEvent.click(tileAtCurrent);
-      }
-
-      const tmp = workingOrder[i];
-      workingOrder[i] = workingOrder[currentIdx];
-      workingOrder[currentIdx] = tmp;
-    }
+    expect(screen.getByTestId(`board-tile-${i}`)).toHaveAttribute('data-tile-id', '');
   }
 
-  expect(screen.getByTestId('recreate-screen')).toBeInTheDocument();
+  for (let slotIndex = 0; slotIndex < targetOrder.length; slotIndex++) {
+    const desiredTileId = targetOrder[slotIndex];
+    const sliderButton = document.querySelector<HTMLButtonElement>(
+      `[data-slider-tile-id="${desiredTileId}"]`,
+    );
+    expect(sliderButton).not.toBeNull();
+
+    const boardSlot = screen.getByTestId(`board-tile-${slotIndex}`);
+
+    if (useDragAndDrop) {
+      fireEvent.dragStart(sliderButton!);
+      fireEvent.dragOver(boardSlot);
+      fireEvent.drop(boardSlot);
+    } else {
+      fireEvent.click(sliderButton!);
+      fireEvent.click(boardSlot);
+    }
+
+    expect(screen.getByTestId(`board-tile-${slotIndex}`)).toHaveAttribute(
+      'data-tile-id',
+      desiredTileId,
+    );
+  }
+
   fireEvent.click(screen.getByTestId('lock-in-button'));
 }
 
@@ -51,7 +57,7 @@ describe('Recall Integration Game Flows', () => {
     vi.useRealTimers();
   });
 
-  it('completes all 3 rounds with auto-advance between rounds, accuracy scoring, dashboard overview, and Dev Mode replay', () => {
+  it('completes all 3 rounds by placing colours from the slider bar into empty squares, with direct round continuation, dashboard overview, and Dev Mode replay', () => {
     const challenge = generateDailyChallenge('2026-10-19');
     render(<App overrideChallengeId="2026-10-19" />);
 
@@ -75,13 +81,13 @@ describe('Recall Integration Game Flows', () => {
 
     expect(screen.getByTestId('recreate-screen')).toBeInTheDocument();
 
-    // Solve Round 1 using Drag-and-Drop + Lock In
-    arrangeAndLockInDisplayedBoard(challenge.rounds[0].targetOrder, true);
+    // Solve Round 1 by dragging colours from the slider bar into the empty squares + Lock In
+    placeFromSliderAndLockIn(challenge.rounds[0].targetOrder, true);
     expect(screen.getByTestId('round-success-screen')).toBeInTheDocument();
     expect(screen.getByTestId('celebration-burst')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-score')).toHaveTextContent('+100');
 
-    // Click Continue to Round 2 -> loads Round 2 memorisation directly (no second Continue button!)
+    // Click Continue to Round 2 -> loads Round 2 memorisation directly
     expect(screen.getByTestId('round-continue-button')).toHaveTextContent(
       'Continue to Round 2',
     );
@@ -98,7 +104,7 @@ describe('Recall Integration Game Flows', () => {
 
     expect(screen.getByTestId('recreate-screen')).toBeInTheDocument();
 
-    // Lock in an unarranged board on Round 2 to test mismatch review ("Your Board" vs "Target Solution")
+    // Lock in an empty/unarranged board on Round 2 to test mismatch review ("Your Board" vs "Target Solution")
     fireEvent.click(screen.getByTestId('lock-in-button'));
     expect(screen.getByTestId('round-failure-screen')).toBeInTheDocument();
     expect(screen.queryByTestId('celebration-burst')).not.toBeInTheDocument();
@@ -120,8 +126,8 @@ describe('Recall Integration Game Flows', () => {
       vi.advanceTimersByTime(300);
     });
 
-    // Solve Round 3 using Tap-to-Swap + Lock In
-    arrangeAndLockInDisplayedBoard(challenge.rounds[2].targetOrder, false);
+    // Solve Round 3 using Tap-to-Place from the slider bar + Lock In
+    placeFromSliderAndLockIn(challenge.rounds[2].targetOrder, false);
     expect(screen.getByTestId('round-success-screen')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-score')).toHaveTextContent('+200');
 

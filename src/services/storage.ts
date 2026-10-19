@@ -1,3 +1,4 @@
+import { isValidBoardSlotOrder } from '../game/board';
 import {
   PUZZLE_VERSION,
   ROUND_CONFIGS,
@@ -9,7 +10,6 @@ import {
   getChallengeNumber,
   isValidChallengeId,
 } from '../game/dailyChallenge';
-import { hasIdenticalUniqueElements } from '../game/permutation';
 import { calculateDailyTotalScore } from '../game/scoring';
 import {
   createInitialSession,
@@ -140,7 +140,7 @@ function isValidRoundResult(
     const puzzle = challenge.rounds.find((p) => p.roundId === r.roundId);
     if (
       puzzle &&
-      !hasIdenticalUniqueElements(r.finalTileOrder as string[], puzzle.targetOrder)
+      !isValidBoardSlotOrder(r.finalTileOrder as string[], puzzle.targetOrder)
     ) {
       return false;
     }
@@ -183,10 +183,7 @@ export function validateStoredSession(
   const currentPuzzle = getRoundPuzzle(challenge, s.currentRoundId);
   if (
     !Array.isArray(s.currentTileOrder) ||
-    !hasIdenticalUniqueElements(
-      s.currentTileOrder as string[],
-      currentPuzzle.targetOrder,
-    )
+    !isValidBoardSlotOrder(s.currentTileOrder as string[], currentPuzzle.targetOrder)
   ) {
     return null;
   }

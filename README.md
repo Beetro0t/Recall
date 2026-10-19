@@ -169,4 +169,4 @@ Recall is a static single-page application ready for deployment on **Vercel** or
 
 - **Client-Side Casual Integrity:** Because the MVP is a serverless client-side application storing state in `localStorage`, scores and streaks are bound to the local browser profile and are not tamper-proof against deliberate DevTools manipulation. Server-side validation is required before introducing public global leaderboards.
 - **Planned Expansions:** Unlimited practice mode, historical daily archive, cross-device account sync, and PWA offline caching.
-"# Recall" 
+  "# Recall"

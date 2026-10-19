@@ -10,6 +10,8 @@ export interface GameBoardProps {
   pattern?: BoardPattern;
   interactive: boolean;
   selectedTileId: string | null;
+  selectedSlotIndex?: number | null;
+  externalHoveredSlotIndex?: number | null;
   compareTargetOrder?: readonly string[] | null;
   isConcealed?: boolean;
   isSuccessHighlight?: boolean;
@@ -20,17 +22,22 @@ export interface GameBoardProps {
   ariaLabel?: string;
   onTileActivate?: (tileId: string) => void;
   onDirectSwap?: (tileIdA: string, tileIdB: string) => void;
+  onSlotActivate?: (slotIndex: number, tileId: string | null) => void;
+  onPlaceTileInSlot?: (tileId: string, slotIndex: number) => void;
+  onRemoveTileFromSlot?: (slotIndex: number) => void;
 }
 
 interface ActiveDragState {
   tileId: string;
+  sourceSlotIndex: number;
   pointerId: number;
   startX: number;
   startY: number;
   currentX: number;
   currentY: number;
   hasMovedPastThreshold: boolean;
-  hoveredTargetId: string | null;
+  hoveredSlotIndex: number | null;
+  hoveredOverSliderBar: boolean;
 }
 
 const DRAG_THRESHOLD_PX = 7;
@@ -42,6 +49,8 @@ export const GameBoard = memo(function GameBoard({
   pattern,
   interactive,
   selectedTileId,
+  selectedSlotIndex = null,
+  externalHoveredSlotIndex = null,
   compareTargetOrder = null,
   isConcealed = false,
   isSuccessHighlight = false,
@@ -52,10 +61,13 @@ export const GameBoard = memo(function GameBoard({
   ariaLabel = 'Puzzle tile grid',
   onTileActivate,
   onDirectSwap,
+  onSlotActivate,
+  onPlaceTileInSlot,
+  onRemoveTileFromSlot,
 }: GameBoardProps) {
   const [dragState, setDragState] = useState<ActiveDragState | null>(null);
   const [nativeDragSourceId, setNativeDragSourceId] = useState<string | null>(null);
-  const [nativeDropTargetId, setNativeDropTargetId] = useState<string | null>(null);
+  const [nativeDropSlotIndex, setNativeDropSlotIndex] = useState<number | null>(null);
 
   const suppressClickUntilMsRef = useRef<number>(0);
 
@@ -67,49 +79,51 @@ export const GameBoard = memo(function GameBoard({
   const maxWidthClass =
     sizeVariant === 'mini'
       ? effectiveCols <= 2
-        ? 'max-w-[120px]'
+        ? 'max-w-[115px]'
         : effectiveCols === 3
-          ? 'max-w-[155px]'
-          : 'max-w-[185px]'
+          ? 'max-w-[150px]'
+          : 'max-w-[180px]'
       : sizeVariant === 'compact'
         ? effectiveCols <= 2
-          ? 'max-w-[180px]'
+          ? 'max-w-[175px]'
           : effectiveCols === 3
-            ? 'max-w-[245px]'
-            : 'max-w-[295px]'
+            ? 'max-w-[235px]'
+            : 'max-w-[285px]'
         : effectiveCols <= 2
-          ? 'max-w-[250px]'
+          ? 'max-w-[235px]'
           : effectiveCols === 3
             ? effectiveRows >= 3
-              ? 'max-w-[310px]'
-              : 'max-w-[345px]'
+              ? 'max-w-[295px]'
+              : 'max-w-[330px]'
             : effectiveRows >= 4
-              ? 'max-w-[330px]'
+              ? 'max-w-[310px]'
               : effectiveRows === 3
-                ? 'max-w-[375px]'
-                : 'max-w-[425px]';
+                ? 'max-w-[355px]'
+                : 'max-w-[400px]';
 
   const gapClass =
     sizeVariant === 'mini'
       ? 'gap-1.5 p-2 rounded-[14px]'
       : sizeVariant === 'compact'
-        ? 'gap-2 p-2.5 rounded-[16px]'
-        : 'gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-[22px]';
+        ? 'gap-2 p-2.5 rounded-[18px]'
+        : 'gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-[24px]';
 
   const handleTilePointerDown = useCallback(
-    (tileId: string, e: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!interactive || isConcealed) return;
+    (slotIndex: number, tileId: string, e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!interactive || isConcealed || !tileId) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
 
       setDragState({
         tileId,
+        sourceSlotIndex: slotIndex,
         pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
         currentX: e.clientX,
         currentY: e.clientY,
         hasMovedPastThreshold: false,
-        hoveredTargetId: null,
+        hoveredSlotIndex: null,
+        hoveredOverSliderBar: false,
       });
     },
     [interactive, isConcealed],
@@ -118,28 +132,38 @@ export const GameBoard = memo(function GameBoard({
   useEffect(() => {
     if (!dragState) return;
 
-    const findUnderlyingTileId = (
+    const inspectDropTarget = (
       clientX: number,
       clientY: number,
-      sourceTileId: string,
-    ): string | null => {
+      sourceSlotIndex: number,
+    ): { slotIndex: number | null; overSliderBar: boolean } => {
       if (
         typeof document === 'undefined' ||
         typeof document.elementsFromPoint !== 'function'
       ) {
-        return null;
+        return { slotIndex: null, overSliderBar: false };
       }
       const elements = document.elementsFromPoint(clientX, clientY);
+      let foundSlot: number | null = null;
+      let overSlider = false;
+
       for (const el of elements) {
-        const button = (el as HTMLElement).closest?.('[data-tile-id]');
-        if (button) {
-          const candidateId = button.getAttribute('data-tile-id');
-          if (candidateId && candidateId !== sourceTileId) {
-            return candidateId;
+        const htmlEl = el as HTMLElement;
+        const slotBtn = htmlEl.closest?.('[data-slot-index]');
+        if (slotBtn && foundSlot === null) {
+          const rawIdx = slotBtn.getAttribute('data-slot-index');
+          if (rawIdx !== null) {
+            const parsed = Number(rawIdx);
+            if (Number.isInteger(parsed) && parsed !== sourceSlotIndex) {
+              foundSlot = parsed;
+            }
           }
         }
+        if (htmlEl.closest?.('[data-slider-bar="true"]')) {
+          overSlider = true;
+        }
       }
-      return null;
+      return { slotIndex: foundSlot, overSliderBar: overSlider };
     };
 
     const handleWindowPointerMove = (e: PointerEvent) => {
@@ -151,9 +175,9 @@ export const GameBoard = memo(function GameBoard({
       const hasMovedPastThreshold =
         dragState.hasMovedPastThreshold || dist >= DRAG_THRESHOLD_PX;
 
-      const hoveredTargetId = hasMovedPastThreshold
-        ? findUnderlyingTileId(e.clientX, e.clientY, dragState.tileId)
-        : null;
+      const hit = hasMovedPastThreshold
+        ? inspectDropTarget(e.clientX, e.clientY, dragState.sourceSlotIndex)
+        : { slotIndex: null, overSliderBar: false };
 
       setDragState((prev) =>
         prev
@@ -162,7 +186,8 @@ export const GameBoard = memo(function GameBoard({
               currentX: e.clientX,
               currentY: e.clientY,
               hasMovedPastThreshold,
-              hoveredTargetId,
+              hoveredSlotIndex: hit.slotIndex,
+              hoveredOverSliderBar: hit.overSliderBar,
             }
           : null,
       );
@@ -173,17 +198,21 @@ export const GameBoard = memo(function GameBoard({
 
       if (dragState.hasMovedPastThreshold) {
         suppressClickUntilMsRef.current = Date.now() + 220;
-        const targetId =
-          findUnderlyingTileId(e.clientX, e.clientY, dragState.tileId) ??
-          dragState.hoveredTargetId;
+        const hit = inspectDropTarget(e.clientX, e.clientY, dragState.sourceSlotIndex);
+        const targetSlotIndex = hit.slotIndex ?? dragState.hoveredSlotIndex;
+        const overSlider = hit.overSliderBar || dragState.hoveredOverSliderBar;
 
-        if (targetId && targetId !== dragState.tileId) {
-          if (onDirectSwap) {
-            onDirectSwap(dragState.tileId, targetId);
-          } else if (onTileActivate) {
-            onTileActivate(dragState.tileId);
-            onTileActivate(targetId);
+        if (targetSlotIndex !== null && targetSlotIndex !== dragState.sourceSlotIndex) {
+          if (onPlaceTileInSlot) {
+            onPlaceTileInSlot(dragState.tileId, targetSlotIndex);
+          } else {
+            const targetTileId = tileOrder[targetSlotIndex];
+            if (targetTileId && onDirectSwap) {
+              onDirectSwap(dragState.tileId, targetTileId);
+            }
           }
+        } else if (overSlider && onRemoveTileFromSlot) {
+          onRemoveTileFromSlot(dragState.sourceSlotIndex);
         }
       }
 
@@ -201,16 +230,20 @@ export const GameBoard = memo(function GameBoard({
       window.removeEventListener('pointerup', handleWindowPointerUpOrCancel);
       window.removeEventListener('pointercancel', handleWindowPointerUpOrCancel);
     };
-  }, [dragState, onDirectSwap, onTileActivate]);
+  }, [dragState, onDirectSwap, onPlaceTileInSlot, onRemoveTileFromSlot, tileOrder]);
 
-  const handleTileActivateGuarded = useCallback(
-    (tileId: string) => {
+  const handleSlotActivateGuarded = useCallback(
+    (slotIndex: number, tileId: string | null) => {
       if (Date.now() < suppressClickUntilMsRef.current) {
         return;
       }
-      onTileActivate?.(tileId);
+      if (onSlotActivate) {
+        onSlotActivate(slotIndex, tileId);
+      } else if (tileId && onTileActivate) {
+        onTileActivate(tileId);
+      }
     },
-    [onTileActivate],
+    [onSlotActivate, onTileActivate],
   );
 
   const handleNativeDragStart = useCallback((tileId: string) => {
@@ -218,31 +251,46 @@ export const GameBoard = memo(function GameBoard({
   }, []);
 
   const handleNativeDragOver = useCallback(
-    (tileId: string, e: DragEvent<HTMLButtonElement>) => {
+    (slotIndex: number, e: DragEvent<HTMLButtonElement>) => {
       e.preventDefault();
-      if (nativeDragSourceId && nativeDragSourceId !== tileId) {
-        setNativeDropTargetId(tileId);
-      }
+      setNativeDropSlotIndex(slotIndex);
     },
-    [nativeDragSourceId],
+    [],
   );
 
   const handleNativeDrop = useCallback(
-    (tileId: string, e: DragEvent<HTMLButtonElement>) => {
+    (slotIndex: number, e: DragEvent<HTMLButtonElement>) => {
       e.preventDefault();
-      const sourceId = nativeDragSourceId || e.dataTransfer?.getData('text/plain');
+      const sourceTileId =
+        nativeDragSourceId || e.dataTransfer?.getData('text/plain') || selectedTileId;
       setNativeDragSourceId(null);
-      setNativeDropTargetId(null);
-      if (sourceId && sourceId !== tileId) {
+      setNativeDropSlotIndex(null);
+
+      if (!sourceTileId) return;
+
+      if (onPlaceTileInSlot) {
+        onPlaceTileInSlot(sourceTileId, slotIndex);
+        return;
+      }
+
+      const targetTileId = tileOrder[slotIndex];
+      if (targetTileId && sourceTileId !== targetTileId) {
         if (onDirectSwap) {
-          onDirectSwap(sourceId, tileId);
+          onDirectSwap(sourceTileId, targetTileId);
         } else if (onTileActivate) {
-          onTileActivate(sourceId);
-          onTileActivate(tileId);
+          onTileActivate(sourceTileId);
+          onTileActivate(targetTileId);
         }
       }
     },
-    [nativeDragSourceId, onDirectSwap, onTileActivate],
+    [
+      nativeDragSourceId,
+      onDirectSwap,
+      onPlaceTileInSlot,
+      onTileActivate,
+      selectedTileId,
+      tileOrder,
+    ],
   );
 
   // Build SVG path points if pattern specifies connectPath (e.g. Snake, Diamond, Hollow Box, Arch)
@@ -257,6 +305,10 @@ export const GameBoard = memo(function GameBoard({
           .join(' ')
       : null;
 
+  const isAnySliderTileSelected = Boolean(
+    selectedTileId && !tileOrder.includes(selectedTileId),
+  );
+
   return (
     <div
       role="group"
@@ -266,8 +318,8 @@ export const GameBoard = memo(function GameBoard({
       data-pattern={pattern?.patternId ?? 'grid'}
       className={`
         relative w-full mx-auto grid ${maxWidthClass} ${gapClass}
-        bg-[#16181E]/95 border border-[#2D313B]
-        shadow-[0_16px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)]
+        bg-[#090A0E]/95 border border-white/[0.09]
+        shadow-[0_24px_60px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.06)]
         no-select
       `}
       style={{
@@ -286,8 +338,8 @@ export const GameBoard = memo(function GameBoard({
           <polyline
             points={svgPoints}
             fill="none"
-            stroke="rgba(145, 173, 255, 0.22)"
-            strokeWidth="2.2"
+            stroke="rgba(255, 255, 255, 0.16)"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray="3 3"
@@ -296,15 +348,17 @@ export const GameBoard = memo(function GameBoard({
       )}
 
       {tileOrder.map((tileId, index) => {
-        const tile = tiles[tileId];
-        if (!tile) return null;
+        const tile = tileId ? (tiles[tileId] ?? null) : null;
 
         const isDraggingThis = Boolean(
-          dragState && dragState.tileId === tile.id && dragState.hasMovedPastThreshold,
+          dragState &&
+          dragState.sourceSlotIndex === index &&
+          dragState.hasMovedPastThreshold,
         );
         const isDropTargetThis =
-          (dragState?.hasMovedPastThreshold && dragState.hoveredTargetId === tile.id) ||
-          nativeDropTargetId === tile.id;
+          (dragState?.hasMovedPastThreshold && dragState.hoveredSlotIndex === index) ||
+          nativeDropSlotIndex === index ||
+          externalHoveredSlotIndex === index;
 
         const dragOffset =
           isDraggingThis && dragState
@@ -315,21 +369,26 @@ export const GameBoard = memo(function GameBoard({
             : null;
 
         const matchStatus = compareTargetOrder
-          ? compareTargetOrder[index] === tile.id
+          ? tile && compareTargetOrder[index] === tile.id
             ? 'correct'
             : 'mismatch'
           : null;
 
         const cellCoord = pattern?.cells[index];
+        const isSelected = Boolean(
+          (tile && selectedTileId === tile.id) ||
+          (!tile && selectedSlotIndex === index),
+        );
 
         return (
           <Tile
-            key={tile.id}
+            key={tile ? tile.id : `empty-slot-${index}`}
             tile={tile}
             positionIndex={index}
             cellCoord={cellCoord}
             interactive={interactive}
-            isSelected={selectedTileId === tile.id}
+            isSelected={isSelected}
+            isTargetSlotHighlighted={!tile && isAnySliderTileSelected}
             isDragging={isDraggingThis}
             isDropTarget={Boolean(isDropTargetThis)}
             dragOffset={dragOffset}
@@ -340,7 +399,7 @@ export const GameBoard = memo(function GameBoard({
             showSymbol={showSymbols}
             shouldReduceMotion={shouldReduceMotion}
             sizeVariant={sizeVariant}
-            onActivate={handleTileActivateGuarded}
+            onSlotActivate={handleSlotActivateGuarded}
             onTilePointerDown={handleTilePointerDown}
             onNativeDragStart={handleNativeDragStart}
             onNativeDragOver={handleNativeDragOver}

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   countMatchedTiles,
+  countPlacedTiles,
+  createEmptyBoardOrder,
+  getAvailableSliderTiles,
   isBoardSolved,
+  placeTileInBoardSlot,
+  removeTileFromBoardSlot,
   swapTilesById,
   swapTilesByIndex,
 } from '../../game/board';
@@ -22,6 +27,9 @@ import {
   advanceAfterRoundResult,
   createInitialSession,
   lockInRoundSolution,
+  performClearBoardToSlider,
+  performTilePlacement,
+  performTileRemoveFromBoard,
   performTileSwap,
   reconcileSessionWithClock,
   startConcealingPhase,
@@ -99,7 +107,35 @@ describe('Puzzle Generation, Spatial Patterns & Permutation Math', () => {
   });
 });
 
-describe('Board Operations', () => {
+describe('Board & Slider Operations', () => {
+  it('creates empty boards, places tiles from the slider bar, and removes tiles back to the slider', () => {
+    const sliderIds = ['t1', 't2', 't3', 't4'];
+    const empty = createEmptyBoardOrder(4);
+    expect(empty).toEqual(['', '', '', '']);
+    expect(countPlacedTiles(empty)).toBe(0);
+    expect(getAvailableSliderTiles(sliderIds, empty)).toEqual(sliderIds);
+
+    const step1 = placeTileInBoardSlot(empty, 't2', 1);
+    expect(step1.swapped).toBe(true);
+    expect(step1.nextOrder).toEqual(['', 't2', '', '']);
+    expect(countPlacedTiles(step1.nextOrder)).toBe(1);
+    expect(getAvailableSliderTiles(sliderIds, step1.nextOrder)).toEqual([
+      't1',
+      't3',
+      't4',
+    ]);
+
+    // Moving an already placed tile to another empty slot
+    const step2 = placeTileInBoardSlot(step1.nextOrder, 't2', 3);
+    expect(step2.swapped).toBe(true);
+    expect(step2.nextOrder).toEqual(['', '', '', 't2']);
+
+    // Removing a placed tile back to the slider bar
+    const step3 = removeTileFromBoardSlot(step2.nextOrder, 3);
+    expect(step3.swapped).toBe(true);
+    expect(step3.nextOrder).toEqual(['', '', '', '']);
+  });
+
   it('swaps two distinct valid tiles and rejects self-swaps or invalid indices', () => {
     const board = ['t1', 't2', 't3', 't4'];
 
@@ -118,10 +154,11 @@ describe('Board Operations', () => {
     expect(unknownId.swapped).toBe(false);
   });
 
-  it('detects solved boards and counts matched tiles across all round sizes', () => {
+  it('detects solved boards and counts matched tiles while ignoring empty slots', () => {
     expect(isBoardSolved(['a', 'b', 'c', 'd'], ['a', 'b', 'c', 'd'])).toBe(true);
     expect(isBoardSolved(['a', 'b', 'd', 'c'], ['a', 'b', 'c', 'd'])).toBe(false);
     expect(countMatchedTiles(['a', 'b', 'd', 'c'], ['a', 'b', 'c', 'd'])).toBe(2);
+    expect(countMatchedTiles(['a', '', '', 'd'], ['a', 'b', 'c', 'd'])).toBe(2);
   });
 });
 
@@ -265,8 +302,8 @@ describe('UTC Dates, Streaks & Share Formatting', () => {
   });
 });
 
-describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recovery', () => {
-  it('requires explicit lock-in and advances directly to next round memorising without intermission stop', () => {
+describe('State Machine, Empty Board + Slider Placement, Explicit Lock In & Storage Recovery', () => {
+  it('starts recreation with empty board squares and places tiles from the slider bar before explicit lock-in', () => {
     const challenge = generateDailyChallenge('2026-10-19');
     const round1 = challenge.rounds[0];
 
@@ -274,21 +311,33 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     session = startRoundMemorisation(session, challenge, 1_000);
     session = startRecreatingPhase(session, challenge, 9_250);
 
-    const oneSwapFromSolved = [...round1.targetOrder];
-    const tmp = oneSwapFromSolved[0];
-    oneSwapFromSolved[0] = oneSwapFromSolved[1];
-    oneSwapFromSolved[1] = tmp;
+    // Board starts completely empty after memorisation
+    expect(session.currentTileOrder).toEqual(['', '', '', '']);
 
-    session = { ...session, currentTileOrder: oneSwapFromSolved };
-    session = performTileSwap(
+    // Place each tile from the slider bar into its target square
+    round1.targetOrder.forEach((tileId, idx) => {
+      session = performTilePlacement(
+        session,
+        challenge,
+        tileId,
+        idx,
+        10_000 + idx * 100,
+      );
+    });
+
+    expect(session.currentTileOrder).toEqual(round1.targetOrder);
+    expect(session.phase).toBe('recreating');
+
+    // Test removing and re-placing a tile
+    session = performTileRemoveFromBoard(session, challenge, 0, 11_000);
+    expect(session.currentTileOrder[0]).toBe('');
+    session = performTilePlacement(
       session,
       challenge,
-      oneSwapFromSolved[0],
-      oneSwapFromSolved[1],
-      11_000,
+      round1.targetOrder[0],
+      0,
+      11_200,
     );
-
-    expect(session.phase).toBe('recreating');
 
     session = lockInRoundSolution(session, challenge, 11_500);
     expect(session.phase).toBe('round-success');
@@ -301,6 +350,26 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     expect(session.currentRoundId).toBe(2);
   });
 
+  it('clears all placed tiles back to the slider bar when requested', () => {
+    const challenge = generateDailyChallenge('2026-10-19');
+    const round1 = challenge.rounds[0];
+    let session = createInitialSession(challenge);
+    session = startRoundMemorisation(session, challenge, 1_000);
+    session = startRecreatingPhase(session, challenge, 9_250);
+
+    session = performTilePlacement(
+      session,
+      challenge,
+      round1.targetOrder[0],
+      0,
+      10_000,
+    );
+    expect(countPlacedTiles(session.currentTileOrder)).toBe(1);
+
+    session = performClearBoardToSlider(session, challenge, 10_500);
+    expect(session.currentTileOrder).toEqual(['', '', '', '']);
+  });
+
   it('records partial match points and player arrangement when locking in a partially correct board', () => {
     const challenge = generateDailyChallenge('2026-10-19');
     const round1 = challenge.rounds[0];
@@ -309,13 +378,20 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     session = startRecreatingPhase(session, challenge, 9_250);
 
     // Place 2 of 4 tiles in their exact target position
-    const twoCorrect = [
+    session = performTilePlacement(
+      session,
+      challenge,
       round1.targetOrder[0],
+      0,
+      10_000,
+    );
+    session = performTilePlacement(
+      session,
+      challenge,
       round1.targetOrder[1],
-      round1.targetOrder[3],
-      round1.targetOrder[2],
-    ];
-    session = { ...session, currentTileOrder: twoCorrect };
+      1,
+      10_200,
+    );
 
     const locked = lockInRoundSolution(session, challenge, 12_000);
     expect(locked.phase).toBe('round-failure');
@@ -325,8 +401,9 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     expect(locked.results[0].score).toBe(50);
   });
 
-  it('rejects swaps occurring at or after the recreation deadline', () => {
+  it('rejects placements or swaps occurring at or after the recreation deadline', () => {
     const challenge = generateDailyChallenge('2026-10-19');
+    const round1 = challenge.rounds[0];
     let session = createInitialSession(challenge);
     session = startRoundMemorisation(session, challenge, 1_000);
     session = startConcealingPhase(session, 9_000);
@@ -334,8 +411,13 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
 
     expect(session.phaseDeadlineEpochMs).toBe(29_250);
 
-    const [tileA, tileB] = session.currentTileOrder;
-    const expiredSession = performTileSwap(session, challenge, tileA, tileB, 29_250);
+    const expiredSession = performTilePlacement(
+      session,
+      challenge,
+      round1.targetOrder[0],
+      0,
+      29_250,
+    );
     expect(expiredSession.phase).toBe('round-failure');
     expect(expiredSession.results[0].failureReason).toBe('timeout');
   });
@@ -347,6 +429,7 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     const reconciled = reconcileSessionWithClock(session, challenge, 20_000);
     expect(reconciled.phase).toBe('recreating');
     expect(reconciled.phaseDeadlineEpochMs).toBe(38_250);
+    expect(reconciled.currentTileOrder).toEqual(['', '', '', '']);
 
     const timedOut = reconcileSessionWithClock(reconciled, challenge, 40_000);
     expect(timedOut.phase).toBe('round-failure');
@@ -375,12 +458,24 @@ describe('State Machine, Explicit Lock In, Direct Round Advance & Storage Recove
     for (const round of challenge.rounds) {
       s = startRoundMemorisation(s, challenge, 1_000);
       s = startRecreatingPhase(s, challenge, 9_250);
-      const almostSolved = [...round.targetOrder];
-      const tmp = almostSolved[0];
-      almostSolved[0] = almostSolved[1];
-      almostSolved[1] = tmp;
-      s = { ...s, currentTileOrder: almostSolved };
-      s = performTileSwap(s, challenge, almostSolved[0], almostSolved[1], 12_000);
+      round.targetOrder.forEach((tileId, idx) => {
+        s = performTilePlacement(s, challenge, tileId, idx, 10_000 + idx * 100);
+      });
+      // Swap two placed tiles and swap them back to test performTileSwap on placed tiles
+      s = performTileSwap(
+        s,
+        challenge,
+        round.targetOrder[0],
+        round.targetOrder[1],
+        12_000,
+      );
+      s = performTileSwap(
+        s,
+        challenge,
+        round.targetOrder[0],
+        round.targetOrder[1],
+        12_200,
+      );
       s = lockInRoundSolution(s, challenge, 12_500);
       expect(s.phase).toBe('round-success');
       s = advanceAfterRoundResult(s, challenge, 15_000);

@@ -61,10 +61,10 @@ export function RoundResultScreen({
         className="space-y-1 text-center"
       >
         <div
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+          className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold ${
             isSuccess
-              ? 'bg-[#73C8AC]/15 text-[#73C8AC] border border-[#73C8AC]/35 shadow-[0_0_20px_rgba(115,200,172,0.2)]'
-              : 'bg-[#F18D83]/15 text-[#F18D83] border border-[#F18D83]/30'
+              ? 'bg-[#55EFC4]/15 text-[#55EFC4] border border-[#55EFC4]/40 shadow-[0_0_20px_rgba(85,239,196,0.2)]'
+              : 'bg-[#FF6B6B]/15 text-[#FF6B6B] border border-[#FF6B6B]/35'
           }`}
         >
           {isSuccess ? (
@@ -83,7 +83,7 @@ export function RoundResultScreen({
         </div>
 
         <h1
-          className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#F5F5F7]"
+          className="text-2xl sm:text-3xl font-semibold tracking-[-0.04em] text-white"
           data-testid="round-outcome-heading"
         >
           {isSuccess
@@ -102,7 +102,7 @@ export function RoundResultScreen({
               shouldReduceMotion={shouldReduceMotion}
               colors={roundColors}
             />
-            <span className="block text-xs text-center text-[#73C8AC] font-medium">
+            <span className="block text-xs text-center text-[#55EFC4] font-medium">
               All {totalCount} tiles in position (+{result.score} pts)
             </span>
             <GameBoard
@@ -130,7 +130,7 @@ export function RoundResultScreen({
               className="space-y-1.5 text-center"
               data-testid="round-result-player-board"
             >
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#F5F5F7] block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85 block">
                 Your Board ({matchedCount}/{totalCount})
               </span>
               <GameBoard
@@ -152,7 +152,7 @@ export function RoundResultScreen({
               className="space-y-1.5 text-center"
               data-testid="round-result-target-board"
             >
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#73C8AC] block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#55EFC4] block">
                 Target Solution
               </span>
               <GameBoard
@@ -174,25 +174,25 @@ export function RoundResultScreen({
       </div>
 
       {/* Round metrics */}
-      <div className="grid grid-cols-3 gap-2.5 bg-[#16181E] border border-[#2D313B] rounded-[16px] p-3 text-center tabular-nums">
+      <div className="grid grid-cols-3 gap-2.5 bg-white/[0.03] border border-white/[0.08] rounded-[18px] p-3 text-center tabular-nums">
         <div>
-          <span className="block text-[11px] uppercase tracking-wider text-[#9297A3]">
+          <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
             Points Earned
           </span>
           <span
-            className="text-xl font-semibold text-[#F5F5F7] mt-0.5 block"
+            className="text-xl font-semibold tracking-[-0.03em] text-white mt-0.5 block"
             data-testid="round-result-score"
           >
             +{result.score}
           </span>
         </div>
 
-        <div className="border-x border-[#2D313B]">
-          <span className="block text-[11px] uppercase tracking-wider text-[#9297A3]">
+        <div className="border-x border-white/[0.08]">
+          <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
             Correct Tiles
           </span>
           <span
-            className="text-xl font-semibold text-[#73C8AC] mt-0.5 block"
+            className="text-xl font-semibold tracking-[-0.03em] text-[#55EFC4] mt-0.5 block"
             data-testid="round-result-matched"
           >
             {matchedCount}/{totalCount}
@@ -200,15 +200,15 @@ export function RoundResultScreen({
         </div>
 
         <div>
-          <span className="block text-[11px] uppercase tracking-wider text-[#9297A3]">
+          <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
             Swaps Used
           </span>
           <span
-            className="text-xl font-semibold text-[#F5F5F7] mt-0.5 block"
+            className="text-xl font-semibold tracking-[-0.03em] text-white mt-0.5 block"
             data-testid="round-result-swaps"
           >
             {result.swaps}{' '}
-            <span className="text-xs font-normal text-[#9297A3]">
+            <span className="text-xs font-normal text-white/45">
               (opt {result.optimalSwaps})
             </span>
           </span>
@@ -216,7 +216,11 @@ export function RoundResultScreen({
       </div>
 
       {/* Continue to next round button (loads next round directly without an intermission screen) */}
-      <PrimaryButton onClick={onContinue} data-testid="round-continue-button">
+      <PrimaryButton
+        onClick={onContinue}
+        data-testid="round-continue-button"
+        className={isSuccess ? 'dialed-spectrum-ring' : ''}
+      >
         <span>
           {isFinalRound
             ? 'View Results Dashboard'
