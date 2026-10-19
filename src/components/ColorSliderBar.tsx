@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { Check, RotateCcw } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Tile as TileModel } from '../game/types';
@@ -52,33 +52,6 @@ export const ColorSliderBar = memo(function ColorSliderBar({
   const unplacedIds = shuffledOrder.filter((id) => !placedSet.has(id));
   const placedCount = placedSet.size;
   const totalCount = shuffledOrder.length;
-
-  // Slider scrub index (0 .. shuffledOrder.length - 1) synchronized with selectedTileId
-  const selectedSliderIndex = selectedTileId
-    ? Math.max(0, shuffledOrder.indexOf(selectedTileId))
-    : unplacedIds.length > 0
-      ? Math.max(0, shuffledOrder.indexOf(unplacedIds[0]))
-      : 0;
-
-  // Build gradient stops for the Dialed-style colour slider track
-  const gradientStops = shuffledOrder
-    .map((id, idx) => {
-      const hex = tiles[id]?.hex ?? '#333';
-      const pct =
-        shuffledOrder.length > 1
-          ? Math.round((idx / (shuffledOrder.length - 1)) * 100)
-          : 50;
-      return `${hex} ${pct}%`;
-    })
-    .join(', ');
-
-  const handleRangeScrub = (e: ChangeEvent<HTMLInputElement>) => {
-    const idx = Number(e.target.value);
-    const tileId = shuffledOrder[idx];
-    if (tileId) {
-      onSelectTile(tileId);
-    }
-  };
 
   const handleTilePointerDown = useCallback(
     (tileId: string, e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -357,28 +330,6 @@ export const ColorSliderBar = memo(function ColorSliderBar({
             </motion.button>
           );
         })}
-      </div>
-
-      {/* Dialed.gg-inspired continuous tactile scrubber rail */}
-      <div className="relative pt-1 px-1 flex items-center">
-        <div
-          aria-hidden="true"
-          className="w-full h-2.5 rounded-full border border-white/15 shadow-inner overflow-hidden"
-          style={{
-            background: `linear-gradient(90deg, ${gradientStops})`,
-          }}
-        />
-        <input
-          type="range"
-          min={0}
-          max={Math.max(0, shuffledOrder.length - 1)}
-          step={1}
-          value={selectedSliderIndex}
-          onChange={handleRangeScrub}
-          aria-label="Slide to scrub across colours"
-          data-testid="color-slider-range"
-          className="dialed-slider-input absolute inset-x-1 w-[calc(100%-0.5rem)] h-6 opacity-100 cursor-grab active:cursor-grabbing"
-        />
       </div>
     </motion.div>
   );

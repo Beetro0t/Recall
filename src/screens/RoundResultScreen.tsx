@@ -51,6 +51,7 @@ export function RoundResultScreen({
     .map((id) => puzzle.tiles[id]?.hex)
     .filter((hex): hex is string => Boolean(hex));
 
+  // Returns null if no other players have completed this round yet
   const community = useMemo(
     () => getRoundCommunityComparison(challengeId, puzzle, result),
     [challengeId, puzzle, result],
@@ -189,7 +190,7 @@ export function RoundResultScreen({
         )}
       </div>
 
-      {/* Round metrics + Community choice comparison */}
+      {/* Round metrics + Conditional Community choice comparison (only shown when other players have played) */}
       <div className="space-y-2">
         <div className="grid grid-cols-3 gap-2 bg-white/[0.03] border border-white/[0.08] rounded-[18px] p-2.5 text-center tabular-nums">
           <div>
@@ -216,80 +217,99 @@ export function RoundResultScreen({
             </span>
           </div>
 
-          <div>
-            <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
-              vs. Others
-            </span>
-            <span
-              className="text-lg font-semibold tracking-[-0.03em] text-white mt-0.5 block"
-              data-testid="round-result-percentile"
-            >
-              Beat {community.betterThanPct}%
-            </span>
-          </div>
+          {community ? (
+            <div>
+              <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
+                vs. Others
+              </span>
+              <span
+                className="text-lg font-semibold tracking-[-0.03em] text-white mt-0.5 block"
+                data-testid="round-result-percentile"
+              >
+                Beat {community.betterThanPct}%
+              </span>
+            </div>
+          ) : (
+            <div>
+              <span className="block text-[10px] uppercase tracking-[0.14em] text-white/50">
+                Swaps Used
+              </span>
+              <span
+                className="text-lg font-semibold tracking-[-0.03em] text-white mt-0.5 block"
+                data-testid="round-result-swaps"
+              >
+                {result.swaps}{' '}
+                <span className="text-xs font-normal text-white/45">
+                  (opt {result.optimalSwaps})
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Square-by-square crowd choice agreement strip */}
-        <div
-          className="rounded-[18px] bg-white/[0.03] border border-white/[0.08] p-2.5 space-y-2"
-          data-testid="round-community-choices"
-        >
-          <div className="flex items-center justify-between text-[11px] text-white/60 px-0.5 tabular-nums">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-white/85">
-              <Users className="w-3.5 h-3.5 text-[#55EFC4]" aria-hidden="true" />
-              <span>How Your Choices Compare</span>
-            </span>
-            <span>
-              Crowd avg {community.avgMatchedTiles}/{totalCount} ·{' '}
-              {community.roundClearRatePct}% cleared
-            </span>
-          </div>
-
+        {/* Square-by-square crowd choice agreement strip — only rendered if other players have played */}
+        {community && (
           <div
-            className="grid gap-1.5"
-            style={{
-              gridTemplateColumns: `repeat(${community.slotBreakdown.length}, minmax(0, 1fr))`,
-            }}
+            className="rounded-[18px] bg-white/[0.03] border border-white/[0.08] p-2.5 space-y-2"
+            data-testid="round-community-choices"
           >
-            {community.slotBreakdown.map((slot) => {
-              const chosenTile = slot.playerTileId
-                ? puzzle.tiles[slot.playerTileId]
-                : null;
-              const targetTile = puzzle.tiles[slot.targetTileId];
+            <div className="flex items-center justify-between text-[11px] text-white/60 px-0.5 tabular-nums">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-white/85">
+                <Users className="w-3.5 h-3.5 text-[#55EFC4]" aria-hidden="true" />
+                <span>How Your Choices Compare</span>
+              </span>
+              <span>
+                Crowd avg {community.avgMatchedTiles}/{totalCount} ·{' '}
+                {community.roundClearRatePct}% cleared
+              </span>
+            </div>
 
-              return (
-                <div
-                  key={slot.slotIndex}
-                  className={`p-1.5 rounded-[11px] border text-center tabular-nums ${
-                    slot.isPlayerCorrect
-                      ? 'bg-[#55EFC4]/[0.06] border-[#55EFC4]/30'
-                      : 'bg-[#FF6B6B]/[0.06] border-[#FF6B6B]/30'
-                  }`}
-                  title={
-                    slot.isPlayerCorrect
-                      ? `Square ${slot.slotIndex + 1}: ${slot.sameChoicePct}% of players also placed ${targetTile?.colorName ?? 'this colour'} here`
-                      : `Square ${slot.slotIndex + 1}: ${slot.sameChoicePct}% picked your choice; ${slot.correctRatePct}% got ${targetTile?.colorName ?? 'the target'} right`
-                  }
-                >
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0"
-                      style={{
-                        backgroundColor: chosenTile?.hex ?? 'transparent',
-                      }}
-                    />
-                    <span className="text-[10px] font-semibold text-white/90">
-                      {slot.sameChoicePct}%
+            <div
+              className="grid gap-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${community.slotBreakdown.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {community.slotBreakdown.map((slot) => {
+                const chosenTile = slot.playerTileId
+                  ? puzzle.tiles[slot.playerTileId]
+                  : null;
+                const targetTile = puzzle.tiles[slot.targetTileId];
+
+                return (
+                  <div
+                    key={slot.slotIndex}
+                    className={`p-1.5 rounded-[11px] border text-center tabular-nums ${
+                      slot.isPlayerCorrect
+                        ? 'bg-[#55EFC4]/[0.06] border-[#55EFC4]/30'
+                        : 'bg-[#FF6B6B]/[0.06] border-[#FF6B6B]/30'
+                    }`}
+                    title={
+                      slot.isPlayerCorrect
+                        ? `Square ${slot.slotIndex + 1}: ${slot.sameChoicePct}% of players also placed ${targetTile?.colorName ?? 'this colour'} here`
+                        : `Square ${slot.slotIndex + 1}: ${slot.sameChoicePct}% picked your choice; ${slot.correctRatePct}% got ${targetTile?.colorName ?? 'the target'} right`
+                    }
+                  >
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0"
+                        style={{
+                          backgroundColor: chosenTile?.hex ?? 'transparent',
+                        }}
+                      />
+                      <span className="text-[10px] font-semibold text-white/90">
+                        {slot.sameChoicePct}%
+                      </span>
+                    </div>
+                    <span className="block text-[9px] text-white/45 leading-tight truncate">
+                      {slot.isPlayerCorrect ? 'matched' : 'same pick'}
                     </span>
                   </div>
-                  <span className="block text-[9px] text-white/45 leading-tight truncate">
-                    {slot.isPlayerCorrect ? 'matched' : 'same pick'}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Continue to next round button (loads next round directly without an intermission screen) */}

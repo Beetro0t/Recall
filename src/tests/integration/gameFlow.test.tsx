@@ -2,6 +2,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../app/App';
 import { generateDailyChallenge } from '../../game/puzzleGenerator';
+import {
+  clearCommunityStorageForTesting,
+  recordDailyPlayerChoices,
+  recordRoundPlayerChoices,
+} from '../../services/communityStats';
 
 /**
  * Helper to place all tiles from the bottom ColorSliderBar into the empty
@@ -14,6 +19,7 @@ function placeFromSliderAndLockIn(
 ) {
   expect(screen.getByTestId('recreate-screen')).toBeInTheDocument();
   expect(screen.getByTestId('color-slider-bar')).toBeInTheDocument();
+  expect(screen.queryByTestId('color-slider-range')).not.toBeInTheDocument();
 
   // Verify the board starts with empty squares
   for (let i = 0; i < targetOrder.length; i++) {
@@ -51,13 +57,14 @@ describe('Recall Integration Game Flows', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    clearCommunityStorageForTesting();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('completes all 3 rounds on Daily #001 by placing colours from the slider bar, tracks player choices, and shows relative community performance', () => {
+  it('hides community comparison when no one else has played yet (zero mocked data), and completes all 3 rounds on Daily #001', () => {
     const challenge = generateDailyChallenge('2026-10-19');
     expect(challenge.challengeNumber).toBe(1);
 
@@ -90,10 +97,10 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('round-success-screen')).toBeInTheDocument();
     expect(screen.getByTestId('celebration-burst')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-score')).toHaveTextContent('+100');
-    expect(screen.getByTestId('round-result-percentile')).toHaveTextContent(
-      /Beat \d+%/,
-    );
-    expect(screen.getByTestId('round-community-choices')).toBeInTheDocument();
+
+    // Because no other player has played Round 1 yet, community comparison is NOT shown
+    expect(screen.queryByTestId('round-community-choices')).not.toBeInTheDocument();
+    expect(screen.getByTestId('round-result-swaps')).toBeInTheDocument();
 
     // Click Continue to Round 2 -> loads Round 2 memorisation directly
     expect(screen.getByTestId('round-continue-button')).toHaveTextContent(
@@ -118,7 +125,7 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.queryByTestId('celebration-burst')).not.toBeInTheDocument();
     expect(screen.getByTestId('round-result-player-board')).toBeInTheDocument();
     expect(screen.getByTestId('round-result-target-board')).toBeInTheDocument();
-    expect(screen.getByTestId('round-community-choices')).toBeInTheDocument();
+    expect(screen.queryByTestId('round-community-choices')).not.toBeInTheDocument();
 
     // Click Continue to Round 3 -> loads Round 3 memorisation directly
     expect(screen.getByTestId('round-continue-button')).toHaveTextContent(
@@ -150,12 +157,8 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('final-matched-tiles')).toHaveTextContent('12/18');
     expect(screen.getByTestId('final-total-score')).toHaveTextContent('300');
 
-    // Verify Community Comparison Card & Distribution Chart on Results Dashboard
-    expect(screen.getByTestId('community-comparison-card')).toBeInTheDocument();
-    expect(screen.getByTestId('community-percentile-badge')).toHaveTextContent(
-      /Top \d+% · Beat \d+%/,
-    );
-    expect(screen.getByTestId('community-distribution-chart')).toHaveTextContent('YOU');
+    // Because no other player has completed today's challenge, community comparison card is hidden
+    expect(screen.queryByTestId('community-comparison-card')).not.toBeInTheDocument();
 
     // Open full-size Review Inspector modal
     fireEvent.click(screen.getByTestId('open-review-button'));
@@ -172,6 +175,80 @@ describe('Recall Integration Game Flows', () => {
     expect(screen.getByTestId('home-round-card-3')).toHaveTextContent('8/8 right');
     expect(screen.getByTestId('start-challenge-button')).toHaveTextContent(
       'Results (12/18 right)',
+    );
+  });
+
+  it('displays real community comparison stats once another player has recorded their choices', () => {
+    const challenge = generateDailyChallenge('2026-10-19');
+
+    // Record another real player's round & daily choices first
+    const otherR1Result = {
+      roundId: 1,
+      status: 'success' as const,
+      swaps: 4,
+      optimalSwaps: 2,
+      solveTimeMs: 5000,
+      remainingMs: 15000,
+      score: 100,
+      finalTileOrder: [...challenge.rounds[0].targetOrder],
+      matchedTiles: 4,
+      totalTiles: 4,
+      scoringVersion: 'score-v2',
+    };
+    const otherR2Result = {
+      roundId: 2,
+      status: 'failure' as const,
+      failureReason: 'mismatch' as const,
+      swaps: 6,
+      optimalSwaps: 3,
+      solveTimeMs: 10000,
+      remainingMs: 20000,
+      score: 50,
+      finalTileOrder: [...challenge.rounds[1].shuffledOrder],
+      matchedTiles: 2,
+      totalTiles: 6,
+      scoringVersion: 'score-v2',
+    };
+    const otherR3Result = {
+      roundId: 3,
+      status: 'failure' as const,
+      failureReason: 'mismatch' as const,
+      swaps: 8,
+      optimalSwaps: 5,
+      solveTimeMs: 20000,
+      remainingMs: 25000,
+      score: 100,
+      finalTileOrder: [...challenge.rounds[2].shuffledOrder],
+      matchedTiles: 4,
+      totalTiles: 8,
+      scoringVersion: 'score-v2',
+    };
+
+    recordRoundPlayerChoices('2026-10-19', otherR1Result, Date.now(), 'other-player-1');
+    recordRoundPlayerChoices('2026-10-19', otherR2Result, Date.now(), 'other-player-1');
+    recordRoundPlayerChoices('2026-10-19', otherR3Result, Date.now(), 'other-player-1');
+    recordDailyPlayerChoices(
+      '2026-10-19',
+      [otherR1Result, otherR2Result, otherR3Result],
+      Date.now(),
+      'other-player-1',
+    );
+
+    render(<App overrideChallengeId="2026-10-19" />);
+    fireEvent.click(screen.getByTestId('start-challenge-button'));
+    fireEvent.click(screen.getByTestId('tutorial-start-button'));
+
+    act(() => {
+      vi.advanceTimersByTime(8_100);
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    placeFromSliderAndLockIn(challenge.rounds[0].targetOrder, false);
+    expect(screen.getByTestId('round-community-choices')).toBeInTheDocument();
+    expect(screen.getByTestId('round-result-percentile')).toHaveTextContent(
+      'Beat 100%',
     );
   });
 

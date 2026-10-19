@@ -58,7 +58,7 @@ export function RecreateScreen({
 
   const instructionText =
     selectedSlotIndex !== null
-      ? `Square ${selectedSlotIndex + 1} armed — tap or slide a colour below to fill it.`
+      ? `Square ${selectedSlotIndex + 1} armed — tap a colour below to fill it.`
       : selectedTileId !== null
         ? 'Colour armed — tap any empty square (or another tile to swap).'
         : allPlaced
