@@ -1,0 +1,32 @@
+:root {
+  /* Core Surface & Text Tokens */
+  --color-bg: #101114;
+  --color-surface: #1b1d22;
+  --color-surface-elevated: #24262d;
+  --color-border: #30333b;
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #9297a3;
+  --color-accent: #91adff;
+  --color-success: #73c8ac;
+  --color-urgency: #f18d83;
+
+  /* Curated Matte Tile Palette */
+  --tile-blue: #5a82e6;
+  --tile-amber: #dc9648;
+  --tile-violet: #9574cd;
+  --tile-seafoam: #52b69a;
+  --tile-coral: #e06d65;
+  --tile-cyan: #4ea8ce;
+  --tile-yellow: #d9b94e;
+  --tile-rose: #ce6a96;
+
+  /* Spacing & Geometry */
+  --radius-tile: 14px;
+  --radius-card: 18px;
+  --radius-button: 12px;
+  --max-content-width: 460px;
+
+  /* Typography */
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
